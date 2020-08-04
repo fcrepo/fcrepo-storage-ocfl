@@ -19,6 +19,8 @@
 package org.fcrepo.storage.ocfl;
 
 import java.io.InputStream;
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Encapsulates a resource's content and its headers.
@@ -27,8 +29,18 @@ import java.io.InputStream;
  */
 public class ResourceContent implements AutoCloseable {
 
-    private final InputStream contentStream;
     private final ResourceHeaders headers;
+    private final Optional<InputStream> contentStream;
+
+    /**
+     * Creates a new instance
+     *
+     * @param contentStream the resource's content, may be null
+     * @param headers the resource's headers
+     */
+    public ResourceContent(final InputStream contentStream, final ResourceHeaders headers) {
+        this(Optional.ofNullable(contentStream), headers);
+    }
 
     /**
      * Creates a new instance
@@ -36,15 +48,15 @@ public class ResourceContent implements AutoCloseable {
      * @param contentStream the resource's content
      * @param headers the resource's headers
      */
-    public ResourceContent(final InputStream contentStream, final ResourceHeaders headers) {
-        this.contentStream = contentStream;
-        this.headers = headers;
+    public ResourceContent(final Optional<InputStream> contentStream, final ResourceHeaders headers) {
+        this.contentStream = Objects.requireNonNull(contentStream, "contentStream cannot be null");
+        this.headers = Objects.requireNonNull(headers, "headers cannot be null");
     }
 
     /**
      * @return the resource's content
      */
-    public InputStream getContentStream() {
+    public Optional<InputStream> getContentStream() {
         return contentStream;
     }
 
@@ -62,7 +74,9 @@ public class ResourceContent implements AutoCloseable {
      */
     @Override
     public void close() throws Exception {
-        contentStream.close();
+        if (contentStream.isPresent()) {
+            contentStream.get().close();
+        }
     }
 
 }

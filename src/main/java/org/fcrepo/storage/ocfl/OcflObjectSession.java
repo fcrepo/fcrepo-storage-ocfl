@@ -47,7 +47,8 @@ public interface OcflObjectSession {
     void writeResource(final String resourceId, final ResourceContent content);
 
     /**
-     * Deletes a content file from the session, and updates the associated headers.
+     * Deletes a content file from the session, and updates the associated headers. If the resource was added in
+     * the current session, then its headers are also deleted and it is as if the resource never existed.
      *
      * @param resourceId the Fedora resource id of the resource that's associated content file should be delete
      * @param headers the updated resource headers
@@ -56,10 +57,19 @@ public interface OcflObjectSession {
 
     /**
      * Deletes a resource's header file. This should only be called if its content file has already been deleted.
+     * If the resource is the root resource of the object, then the object will be deleted.
      *
      * @param resourceId the Fedora resource id of the resource that's associated header file should be deleted
      */
     void deleteHeaderFile(final String resourceId);
+
+    /**
+     * Deletes all files associated to the specified resource. If the resource is the root resource of the object,
+     * then the object will be deleted.
+     *
+     * @param resourceId the Fedora resource id of the resource to delete
+     */
+    void deleteResource(final String resourceId);
 
     /**
      * Reads a resource's header file.
