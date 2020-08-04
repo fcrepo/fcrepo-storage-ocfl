@@ -39,36 +39,12 @@ public interface OcflObjectSession {
     String ocflObjectId();
 
     /**
-     * Writes a RDF resource to the session.
+     * Writes a resource to the session.
      *
      * @param resourceId the Fedora resource id of the resource to write
      * @param content the content to write
      */
-    void writeRdfResource(final String resourceId, final ResourceContent content);
-
-    /**
-     * Writes a non-RDF resource to the session.
-     *
-     * @param resourceId the Fedora resource id of the resource to write
-     * @param content the content to write
-     */
-    void writeNonRdfResource(final String resourceId, final ResourceContent content);
-
-    /**
-     * Writes an ACL for a RDF resource to the session.
-     *
-     * @param resourceId the Fedora resource id of the resource to write, this should end in "/fcr:acl"
-     * @param content the content to write
-     */
-    void writeAclRdfResource(final String resourceId, final ResourceContent content);
-
-    /**
-     * Writes an ACL for a non-RDF resource to the session.
-     *
-     * @param resourceId the Fedora resource id of the resource to write, this should end in "/fcr:acl"
-     * @param content the content to write
-     */
-    void writeAclNonRdfResource(final String resourceId, final ResourceContent content);
+    void writeResource(final String resourceId, final ResourceContent content);
 
     /**
      * Deletes a content file from the session, and updates the associated headers.
@@ -92,7 +68,7 @@ public interface OcflObjectSession {
      * @return the resource's headers
      * @throws NotFoundException if the resource cannot be found
      */
-    ResourceHeaders readResourceHeaders(final String resourceId);
+    ResourceHeaders readHeaders(final String resourceId);
 
     /**
      * Reads a resource's content.
