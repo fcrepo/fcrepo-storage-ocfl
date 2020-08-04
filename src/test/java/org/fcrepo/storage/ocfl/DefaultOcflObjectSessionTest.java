@@ -272,8 +272,9 @@ public class DefaultOcflObjectSessionTest {
 
     @Test
     public void deleteFileThatHasBeenCommitted() {
-        defaultAg();
+        close(defaultAg());
         final var agBinary = defaultAgBinary();
+        close(agBinary);
 
         final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
 
@@ -281,6 +282,7 @@ public class DefaultOcflObjectSessionTest {
 
         assertEquals(agBinary.getHeaders(), existing.getHeaders());
         assertTrue(existing.getContentStream().isPresent());
+        close(existing);
 
         existing.getHeaders().setDeleted(true);
 
@@ -353,8 +355,8 @@ public class DefaultOcflObjectSessionTest {
 
     @Test
     public void deleteObjectWhenRootResourceHeaderDeleted() {
-        defaultAg();
-        defaultAgBinary();
+        close(defaultAg());
+        close(defaultAgBinary());
 
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
 
@@ -369,8 +371,8 @@ public class DefaultOcflObjectSessionTest {
 
     @Test
     public void deleteObjectWhenAlreadyCommitted() {
-        defaultAg();
-        defaultAgBinary();
+        close(defaultAg());
+        close(defaultAgBinary());
 
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
 
@@ -405,8 +407,8 @@ public class DefaultOcflObjectSessionTest {
 
     @Test
     public void addedFilesToDeletedObject() {
-        defaultAg();
-        defaultAgBinary();
+        close(defaultAg());
+        close(defaultAgBinary());
 
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
 
@@ -425,6 +427,7 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void readHeadersForResourceMarkedAsDeleted() {
         final var ag = defaultAg();
+        close(ag);
 
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
 
@@ -519,12 +522,11 @@ public class DefaultOcflObjectSessionTest {
         session.writeResource(resourceId, content);
 
         final var stagedContent = session.readContent(resourceId);
+        assertResourceContent("stuff", content, stagedContent);
 
         session.commit();
 
         final var committedContent = session.readContent(resourceId);
-
-        assertResourceContent("stuff", content, stagedContent);
         assertResourceContent("stuff", content, committedContent);
     }
 
@@ -537,7 +539,7 @@ public class DefaultOcflObjectSessionTest {
 
     @Test
     public void doNothingWhenNoStagedChangesAndObjectExist() {
-        defaultAg();
+        close(defaultAg());
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
         session.commit();
         assertEquals(1, ocflRepo.describeObject(DEFAULT_AG_ID).getVersionMap().size());
@@ -666,6 +668,17 @@ public class DefaultOcflObjectSessionTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    private void close(final ResourceContent content) {
+        content.getContentStream().map(stream -> {
+            try {
+                stream.close();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            return null;
+        });
     }
 
 }
