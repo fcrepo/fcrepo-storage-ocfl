@@ -19,6 +19,8 @@
 package org.fcrepo.storage.ocfl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectReader;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import edu.wisc.library.ocfl.api.OcflObjectUpdater;
 import edu.wisc.library.ocfl.api.OcflOption;
 import edu.wisc.library.ocfl.api.OcflRepository;
@@ -55,7 +57,8 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private final OcflRepository ocflRepo;
     private final String ocflObjectId;
     private final Path objectStaging;
-    private final ObjectMapper objectMapper;
+    private final ObjectReader headerReader;
+    private final ObjectWriter headerWriter;
     private final Runnable deregisterHook;
 
     private final OcflOption[] ocflOptions;
@@ -76,7 +79,8 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         this.ocflRepo = ocflRepo;
         this.ocflObjectId = ocflObjectId;
         this.objectStaging = objectStaging;
-        this.objectMapper = objectMapper;
+        this.headerReader = objectMapper.readerFor(ResourceHeaders.class);
+        this.headerWriter = objectMapper.writerFor(ResourceHeaders.class);
         this.deregisterHook = deregisterHook;
 
         this.versionInfo = new VersionInfo();
@@ -327,7 +331,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     private void writeHeaders(final ResourceHeaders headers, final Path destination) {
         try {
-            objectMapper.writeValue(destination.toFile(), headers);
+            headerWriter.writeValue(destination.toFile(), headers);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -347,7 +351,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     private ResourceHeaders readHeaders(final InputStream stream) {
         try {
-            return objectMapper.readValue(stream, ResourceHeaders.class);
+            return headerReader.readValue(stream);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -360,12 +364,25 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         return true;
     }
 
+    /**
+     * Attempts to load the root resource id of the OCFL object. If the OCFL object does not exist, then null is
+     * returned and the root resource id is populated on the first session write operation. If the object does
+     * exist but it does not contain a root resource, then an exception is thrown.
+     *
+     * @return the root resource id, or null
+     */
     private String loadRootResourceId() {
-        final var stream = readFromOcfl(encode(PersistencePaths.ROOT_HEADER_PATH));
+        if (ocflRepo.containsObject(ocflObjectId)) {
+            final var stream = readFromOcfl(encode(PersistencePaths.ROOT_HEADER_PATH));
 
-        if (stream.isPresent()) {
-            final var headers = readHeaders(stream.get());
-            return headers.getId();
+            if (stream.isPresent()) {
+                final var headers = readHeaders(stream.get());
+                return headers.getId();
+            } else {
+                throw new IllegalStateException(
+                        String.format("OCFL object %s exists but it does not contain a root Fedora resource",
+                                ocflObjectId));
+            }
         }
 
         return null;

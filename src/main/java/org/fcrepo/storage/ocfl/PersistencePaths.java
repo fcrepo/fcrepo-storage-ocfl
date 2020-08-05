@@ -18,6 +18,8 @@
 
 package org.fcrepo.storage.ocfl;
 
+import org.apache.commons.lang3.StringUtils;
+
 /**
  * This class maps Fedora resources to locations on disk. It is based on this wiki:
  * https://wiki.lyrasis.org/display/FF/Design+-+Fedora+OCFL+Object+Structure
@@ -189,19 +191,19 @@ public final class PersistencePaths {
         final var relative = resourceId.substring(rootResourceId.length() + 1);
 
         if (relative.equals(FCR_ACL)) {
-            return IdInfo.rootAcl(resourceId.substring(0, resourceId.lastIndexOf('/')));
+            return IdInfo.rootAcl(StringUtils.substringBeforeLast(resourceId, "/"));
         } else if (relative.equals(FCR_METADATA)) {
-            return IdInfo.rootDescription(resourceId.substring(0, resourceId.lastIndexOf('/')));
+            return IdInfo.rootDescription(StringUtils.substringBeforeLast(resourceId, "/"));
         }
 
         final var info = IdInfo.regular(resourceId, relative);
 
         if (relative.endsWith(FCR_ACL)) {
             info.isAcl = true;
-            info.relativeId = relative.substring(0, relative.lastIndexOf('/'));
+            info.relativeId = StringUtils.substringBeforeLast(relative, "/");
         } else if (relative.endsWith(FCR_METADATA)) {
             info.isDescription = true;
-            info.relativeId = relative.substring(0, relative.lastIndexOf('/'));
+            info.relativeId = StringUtils.substringBeforeLast(relative, "/");
         }
 
         return info;
