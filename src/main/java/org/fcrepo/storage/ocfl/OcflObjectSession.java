@@ -56,14 +56,6 @@ public interface OcflObjectSession {
     void deleteContentFile(final String resourceId, final ResourceHeaders headers);
 
     /**
-     * Deletes a resource's header file. This should only be called if its content file has already been deleted.
-     * If the resource is the root resource of the object, then the object will be deleted.
-     *
-     * @param resourceId the Fedora resource id of the resource that's associated header file should be deleted
-     */
-    void deleteHeaderFile(final String resourceId);
-
-    /**
      * Deletes all files associated to the specified resource. If the resource is the root resource of the object,
      * then the object will be deleted.
      *

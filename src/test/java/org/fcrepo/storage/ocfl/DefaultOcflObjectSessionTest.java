@@ -302,7 +302,7 @@ public class DefaultOcflObjectSessionTest {
 
         final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        session2.deleteHeaderFile(DEFAULT_AG_BINARY_ID);
+        session2.deleteResource(DEFAULT_AG_BINARY_ID);
 
         expectResourceNotFound(DEFAULT_AG_BINARY_ID, session2);
 
@@ -351,22 +351,6 @@ public class DefaultOcflObjectSessionTest {
 
         assertResourceContent("ag", ag, session.readContent(DEFAULT_AG_ID));
         assertResourceContent("binary2", binary2, session.readContent(DEFAULT_AG_BINARY_ID));
-    }
-
-    @Test
-    public void deleteObjectWhenRootResourceHeaderDeleted() {
-        close(defaultAg());
-        close(defaultAgBinary());
-
-        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-
-        session.deleteHeaderFile(DEFAULT_AG_ID);
-        session.commit();
-
-        expectResourceNotFound(DEFAULT_AG_ID, session);
-        expectResourceNotFound(DEFAULT_AG_BINARY_ID, session);
-
-        assertFalse(ocflRepo.containsObject(DEFAULT_AG_ID));
     }
 
     @Test

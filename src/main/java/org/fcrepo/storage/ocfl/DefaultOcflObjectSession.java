@@ -140,17 +140,6 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     @Override
-    public synchronized void deleteHeaderFile(final String resourceId) {
-        enforceOpen();
-
-        if (Objects.equals(rootResourceId(), resourceId)) {
-            deleteResource(resourceId);
-        } else {
-            deletePaths.add(encode(PersistencePaths.headerPath(rootResourceId(), resourceId)));
-        }
-    }
-
-    @Override
     public synchronized void deleteResource(final String resourceId) {
         enforceOpen();
 

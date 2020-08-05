@@ -59,7 +59,7 @@ public final class PersistencePaths {
     }
 
     /**
-     * Returns the path to the resourceId's header file. The rootResourceId is the ide of the resource that's at the
+     * Returns the path to the resourceId's header file. The rootResourceId is the id of the resource that's at the
      * root of the OCFL object. In the case of atomic resources the rootId and resourceId are one and the same. They
      * are only different for archival parts.
      *
