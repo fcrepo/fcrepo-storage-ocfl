@@ -103,7 +103,7 @@ public class DefaultOcflObjectSessionTest {
         final var contentStr = "Test";
         final var content = atomicBinary(resourceId, "info:fedora/foo", contentStr);
 
-        session.writeResource(resourceId, content);
+        write(session, content);
 
         final var stagedContent = session.readContent(resourceId);
 
@@ -123,14 +123,14 @@ public class DefaultOcflObjectSessionTest {
         final var session1 = sessionFactory.newSession(resourceId);
         final var content1 = atomicBinary(resourceId, "info:fedora/foo", "Test");
 
-        session1.writeResource(resourceId, content1);
+        write(session1, content1);
         session1.commit();
 
         final var session2 = sessionFactory.newSession(resourceId);
         final var contentStr2 = "Updated!";
         final var content2 = atomicBinary(resourceId, "info:fedora/foo", contentStr2);
 
-        session2.writeResource(resourceId, content2);
+        write(session2, content2);
         session2.commit();
 
         final var committedContent = session2.readContent(resourceId);
@@ -148,7 +148,7 @@ public class DefaultOcflObjectSessionTest {
         final var contentStr = "Test";
         final var content = atomicContainer(resourceId, "info:fedora/foo", contentStr);
 
-        session.writeResource(resourceId, content);
+        write(session, content);
 
         final var stagedContent = session.readContent(resourceId);
 
@@ -173,9 +173,9 @@ public class DefaultOcflObjectSessionTest {
         final var containerContent = container(containerId, agId, "bar");
         final var binaryContent = binary(binaryId, containerId, "baz");
 
-        session.writeResource(agId, agContent);
-        session.writeResource(containerId, containerContent);
-        session.writeResource(binaryId, binaryContent);
+        write(session, agContent);
+        write(session, containerContent);
+        write(session, binaryContent);
 
         final var stagedContent = session.readContent(binaryId);
 
@@ -202,8 +202,8 @@ public class DefaultOcflObjectSessionTest {
         final var content = atomicBinary(resourceId, "info:fedora/foo", "blah");
         final var acl = acl(aclId, resourceId, "acl");
 
-        session.writeResource(resourceId, content);
-        session.writeResource(aclId, acl);
+        write(session, content);
+        write(session, acl);
 
         session.commit();
 
@@ -222,8 +222,8 @@ public class DefaultOcflObjectSessionTest {
         final var content = atomicContainer(resourceId, "info:fedora/foo", "blah");
         final var acl = acl(aclId, resourceId, "acl");
 
-        session.writeResource(resourceId, content);
-        session.writeResource(aclId, acl);
+        write(session, content);
+        write(session, acl);
 
         session.commit();
 
@@ -242,8 +242,8 @@ public class DefaultOcflObjectSessionTest {
         final var content = atomicBinary(resourceId, "info:fedora/foo", "blah");
         final var desc = desc(descId, resourceId, "desc");
 
-        session.writeResource(resourceId, content);
-        session.writeResource(descId, desc);
+        write(session, content);
+        write(session, desc);
 
         session.commit();
 
@@ -264,7 +264,7 @@ public class DefaultOcflObjectSessionTest {
         final var resourceId = "info:fedora/foo/bar";
         final var session = sessionFactory.newSession(resourceId);
 
-        session.writeResource(resourceId, atomicBinary(resourceId, "info:fedora/foo", "blah"));
+        write(session, atomicBinary(resourceId, "info:fedora/foo", "blah"));
         session.commit();
 
         session.readContent(resourceId + "/baz");
@@ -286,7 +286,7 @@ public class DefaultOcflObjectSessionTest {
 
         existing.getHeaders().setDeleted(true);
 
-        session1.deleteContentFile(DEFAULT_AG_BINARY_ID, existing.getHeaders());
+        session1.deleteContentFile(existing.getHeaders());
 
         final var stagedDelete = session1.readContent(DEFAULT_AG_BINARY_ID);
 
@@ -318,10 +318,10 @@ public class DefaultOcflObjectSessionTest {
         final var ag = ag(DEFAULT_AG_ID, ROOT, "ag");
         final var binary = binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "binary");
 
-        session.writeResource(DEFAULT_AG_ID, ag);
-        session.writeResource(DEFAULT_AG_BINARY_ID, binary);
+        write(session, ag);
+        write(session, binary);
 
-        session.deleteContentFile(DEFAULT_AG_BINARY_ID, binary.getHeaders());
+        session.deleteContentFile(binary.getHeaders());
 
         expectResourceNotFound(DEFAULT_AG_BINARY_ID, session);
 
@@ -339,13 +339,13 @@ public class DefaultOcflObjectSessionTest {
         final var binary = binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "binary");
         final var binary2 = binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "binary2");
 
-        session.writeResource(DEFAULT_AG_ID, ag);
-        session.writeResource(DEFAULT_AG_BINARY_ID, binary);
+        write(session, ag);
+        write(session, binary);
 
-        session.deleteContentFile(DEFAULT_AG_BINARY_ID, binary.getHeaders());
+        session.deleteContentFile(binary.getHeaders());
         expectResourceNotFound(DEFAULT_AG_BINARY_ID, session);
 
-        session.writeResource(DEFAULT_AG_BINARY_ID, binary2);
+        write(session, binary2);
 
         session.commit();
 
@@ -376,8 +376,8 @@ public class DefaultOcflObjectSessionTest {
         final var ag = ag(DEFAULT_AG_ID, ROOT, "ag");
         final var binary = binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "binary");
 
-        session.writeResource(DEFAULT_AG_ID, ag);
-        session.writeResource(DEFAULT_AG_BINARY_ID, binary);
+        write(session, ag);
+        write(session, binary);
 
         session.deleteResource(DEFAULT_AG_ID);
 
@@ -400,7 +400,7 @@ public class DefaultOcflObjectSessionTest {
 
         final var ag2 = ag(DEFAULT_AG_ID, ROOT, "ag2");
 
-        session.writeResource(DEFAULT_AG_ID, ag2);
+        write(session, ag2);
 
         session.commit();
 
@@ -417,7 +417,7 @@ public class DefaultOcflObjectSessionTest {
 
         ag.getHeaders().setDeleted(true);
 
-        session.deleteContentFile(DEFAULT_AG_ID, ag.getHeaders());
+        session.deleteContentFile(ag.getHeaders());
         session.commit();
 
         final var deletedContent = session.readContent(DEFAULT_AG_ID);
@@ -432,7 +432,7 @@ public class DefaultOcflObjectSessionTest {
 
         final var ag = ag(DEFAULT_AG_ID, ROOT, "ag");
 
-        session.writeResource(DEFAULT_AG_ID, ag);
+        write(session, ag);
 
         final var created = OffsetDateTime.now().minusWeeks(2);
         final var message = "Special message!";
@@ -457,7 +457,7 @@ public class DefaultOcflObjectSessionTest {
     public void abortStagedChanges() {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
         final var ag = ag(DEFAULT_AG_ID, ROOT, "ag");
-        session.writeResource(DEFAULT_AG_ID, ag);
+        write(session, ag);
 
         session.abort();
 
@@ -468,12 +468,12 @@ public class DefaultOcflObjectSessionTest {
     public void failWriteAfterSessionClosed() {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
         final var ag = ag(DEFAULT_AG_ID, ROOT, "ag");
-        session.writeResource(DEFAULT_AG_ID, ag);
+        write(session, ag);
 
         session.commit();
 
         try {
-            session.writeResource(DEFAULT_AG_ID, ag);
+            write(session, ag);
             fail("Should have thrown an exception");
         } catch (IllegalStateException e) {
             // expected exception
@@ -484,7 +484,7 @@ public class DefaultOcflObjectSessionTest {
     public void failCommitAfterSessionClosed() {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
         final var ag = ag(DEFAULT_AG_ID, ROOT, "ag");
-        session.writeResource(DEFAULT_AG_ID, ag);
+        write(session, ag);
 
         session.commit();
 
@@ -503,7 +503,7 @@ public class DefaultOcflObjectSessionTest {
 
         final var content = atomicBinary(resourceId, ROOT, "stuff");
 
-        session.writeResource(resourceId, content);
+        write(session, content);
 
         final var stagedContent = session.readContent(resourceId);
         assertResourceContent("stuff", content, stagedContent);
@@ -548,14 +548,14 @@ public class DefaultOcflObjectSessionTest {
 
     private ResourceContent defaultAg() {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-        session.writeResource(DEFAULT_AG_ID, ag(DEFAULT_AG_ID, ROOT, "ag"));
+        write(session, ag(DEFAULT_AG_ID, ROOT, "ag"));
         session.commit();
         return session.readContent(DEFAULT_AG_ID);
     }
 
     private ResourceContent defaultAgBinary() {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-        session.writeResource(DEFAULT_AG_BINARY_ID, binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "bar"));
+        write(session, binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "bar"));
         session.commit();
         return session.readContent(DEFAULT_AG_BINARY_ID);
     }
@@ -654,15 +654,16 @@ public class DefaultOcflObjectSessionTest {
         }
     }
 
+    private void write(final OcflObjectSession session, final ResourceContent content) {
+        session.writeResource(content.getHeaders(), content.getContentStream().get());
+    }
+
     private void close(final ResourceContent content) {
-        content.getContentStream().map(stream -> {
-            try {
-                stream.close();
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-            return null;
-        });
+        try {
+            content.close();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
 }

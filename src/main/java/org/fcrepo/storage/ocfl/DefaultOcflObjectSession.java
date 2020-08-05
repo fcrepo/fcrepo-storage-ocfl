@@ -101,10 +101,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     @Override
-    public synchronized void writeResource(final String resourceId, final ResourceContent content) {
+    public synchronized void writeResource(final ResourceHeaders headers, final InputStream content) {
         enforceOpen();
 
-        final var paths = resolvePersistencePaths(resourceId, content.getHeaders());
+        final var paths = resolvePersistencePaths(headers);
 
         final var contentPath = encode(paths.getContentFilePath());
         final var headerPath = encode(paths.getHeaderFilePath());
@@ -112,19 +112,20 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         deletePaths.remove(contentPath);
         deletePaths.remove(headerPath);
 
-        content.getHeaders().setContentPath(contentPath.path);
+        headers.setContentPath(contentPath.path);
 
         final var contentDst = createStagingPath(contentPath);
-        write(content.getContentStream(), contentDst);
+        write(content, contentDst);
 
         final var headerDst = createStagingPath(headerPath);
-        writeHeaders(content.getHeaders(), headerDst);
+        writeHeaders(headers, headerDst);
     }
 
     @Override
-    public synchronized void deleteContentFile(final String resourceId, final ResourceHeaders headers) {
+    public synchronized void deleteContentFile(final ResourceHeaders headers) {
         enforceOpen();
 
+        final var resourceId = headers.getId();
         final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));
 
         if (newInSession(headerPath)) {
@@ -234,7 +235,8 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         return !closed;
     }
 
-    private PersistencePaths resolvePersistencePaths(final String resourceId, final ResourceHeaders headers) {
+    private PersistencePaths resolvePersistencePaths(final ResourceHeaders headers) {
+        final var resourceId = headers.getId();
         final PersistencePaths paths;
 
         if (InteractionModel.ACL.getUri().equals(headers.getInteractionModel())) {
@@ -308,10 +310,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         return stagingPath;
     }
 
-    private void write(final Optional<InputStream> content, final Path destination) {
-        if (content.isPresent()) {
+    private void write(final InputStream content, final Path destination) {
+        if (content != null) {
             try {
-                Files.copy(content.get(), destination, StandardCopyOption.REPLACE_EXISTING);
+                Files.copy(content, destination, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
