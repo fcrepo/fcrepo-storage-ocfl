@@ -21,6 +21,7 @@ package org.fcrepo.storage.ocfl;
 import java.net.URI;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.Objects;
 
 /**
  * Resource headers contain metadata about Fedora resources in Fedora 6.
@@ -331,6 +332,45 @@ public class ResourceHeaders {
                 ", deleted=" + deleted +
                 ", contentPath='" + contentPath + '\'' +
                 '}';
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        final ResourceHeaders that = (ResourceHeaders) o;
+        return archivalGroup == that.archivalGroup &&
+                objectRoot == that.objectRoot &&
+                deleted == that.deleted &&
+                Objects.equals(id, that.id) &&
+                Objects.equals(parent, that.parent) &&
+                Objects.equals(stateToken, that.stateToken) &&
+                Objects.equals(interactionModel, that.interactionModel) &&
+                Objects.equals(mimeType, that.mimeType) &&
+                Objects.equals(filename, that.filename) &&
+                Objects.equals(contentSize, that.contentSize) &&
+                Objects.equals(digests, that.digests) &&
+                Objects.equals(externalUrl, that.externalUrl) &&
+                Objects.equals(externalHandling, that.externalHandling) &&
+                Objects.equals(createdDate, that.createdDate) &&
+                Objects.equals(createdBy, that.createdBy) &&
+                Objects.equals(lastModifiedDate, that.lastModifiedDate) &&
+                Objects.equals(lastModifiedBy, that.lastModifiedBy) &&
+                Objects.equals(contentPath, that.contentPath);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, parent, stateToken,
+                interactionModel, mimeType, filename,
+                contentSize, digests, externalUrl,
+                externalHandling, createdDate, createdBy,
+                lastModifiedDate, lastModifiedBy, archivalGroup,
+                objectRoot, deleted, contentPath);
     }
 
 }
