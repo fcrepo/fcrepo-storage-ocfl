@@ -46,6 +46,7 @@ import java.util.Optional;
 import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -529,11 +530,72 @@ public class DefaultOcflObjectSessionTest {
         assertEquals(1, ocflRepo.describeObject(DEFAULT_AG_ID).getVersionMap().size());
     }
 
+    @Test
+    public void restoreAtomicRdfResource() {
+        final var resourceId = "info:fedora/foo/bar";
+        final var session = sessionFactory.newSession(resourceId);
+
+        final var contentStr = "Test";
+        final var content = atomicContainer(resourceId, "info:fedora/foo", contentStr);
+
+        write(session, content);
+
+        final var stagedContent = session.readContent(resourceId);
+
+        assertResourceContent(contentStr, content, stagedContent);
+
+        session.commit();
+
+        final var committedContent = session.readContent(resourceId);
+
+        assertResourceContent(contentStr, content, committedContent);
+
+        // Start a second session to delete and then recreate the resource
+        final var session2 = sessionFactory.newSession(resourceId);
+        session2.deleteResource(resourceId);
+
+        final var contentStr2 = "Test more";
+        final var content2 = atomicContainer(resourceId, "info:fedora/foo", contentStr2);
+
+        write(session2, content2);
+
+        final var stagedContent2 = session2.readContent(resourceId);
+        assertResourceContent(contentStr2, content2, stagedContent2);
+
+        session2.commit();
+
+        final var committedContent2 = session2.readContent(resourceId);
+
+        assertResourceContent(contentStr2, content2, committedContent2);
+    }
+
+    @Test
+    public void writeFileWithNullContent() {
+        final var resourceId = "info:fedora/foo";
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        final var content = atomicBinary(resourceId, ROOT, null);
+
+        write(session, content);
+
+        final var stagedContent = session.readContent(resourceId);
+        assertResourceContent(null, content, stagedContent);
+
+        session.commit();
+
+        final var committedContent = session.readContent(resourceId);
+        assertResourceContent(null, content, committedContent);
+        assertNull(content.getHeaders().getContentPath());
+    }
+
     private void assertResourceContent(final String content,
                                        final ResourceContent expected,
                                        final ResourceContent actual) {
-
-        assertEquals(content, toString(actual.getContentStream()));
+        if (content == null) {
+            assertTrue("content should have been null", actual.getContentStream().isEmpty());
+        } else {
+            assertEquals(content, toString(actual.getContentStream()));
+        }
         assertEquals(expected.getHeaders(), actual.getHeaders());
     }
 
@@ -638,11 +700,16 @@ public class DefaultOcflObjectSessionTest {
         headers.setCreatedDate(Instant.now());
         headers.setLastModifiedBy(DEFAULT_USER);
         headers.setLastModifiedDate(Instant.now());
-        headers.setContentSize((long) content.length());
+        if (content != null) {
+            headers.setContentSize((long) content.length());
+        }
         return headers;
     }
 
     private InputStream stream(final String value) {
+        if (value == null) {
+            return null;
+        }
         return new ByteArrayInputStream(value.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -655,7 +722,7 @@ public class DefaultOcflObjectSessionTest {
     }
 
     private void write(final OcflObjectSession session, final ResourceContent content) {
-        session.writeResource(content.getHeaders(), content.getContentStream().get());
+        session.writeResource(content.getHeaders(), content.getContentStream().orElse(null));
     }
 
     private void close(final ResourceContent content) {

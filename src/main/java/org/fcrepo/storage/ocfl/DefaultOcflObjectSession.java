@@ -112,7 +112,9 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         deletePaths.remove(contentPath);
         deletePaths.remove(headerPath);
 
-        headers.setContentPath(contentPath.path);
+        if (content != null) {
+            headers.setContentPath(contentPath.path);
+        }
 
         final var contentDst = createStagingPath(contentPath);
         write(content, contentDst);
@@ -133,7 +135,11 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         } else {
             final var existingHeaders = readHeaders(resourceId);
 
-            deletePaths.add(encode(existingHeaders.getContentPath()));
+            if (existingHeaders.getContentPath() != null) {
+                deletePaths.add(encode(existingHeaders.getContentPath()));
+            }
+
+            headers.setContentPath(null);
 
             final var headerDst = createStagingPath(headerPath);
             writeHeaders(headers, headerDst);
@@ -160,7 +166,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
             final var existingHeaders = readHeaders(resourceId);
 
             deletePaths.add(headerPath);
-            deletePaths.add(encode(existingHeaders.getContentPath()));
+
+            if (existingHeaders.getContentPath() != null) {
+                deletePaths.add(encode(existingHeaders.getContentPath()));
+            }
         }
     }
 
@@ -174,7 +183,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     @Override
     public ResourceContent readContent(final String resourceId) {
         final var headers = readHeaders(resourceId);
-        final var contentStream = readStreamOptional(encode(headers.getContentPath()));
+        Optional<InputStream> contentStream = Optional.empty();
+        if (headers.getContentPath() != null) {
+            contentStream = Optional.of(readStream(encode(headers.getContentPath()), resourceId));
+        }
         return new ResourceContent(contentStream, headers);
     }
 
@@ -263,7 +275,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     private Optional<InputStream> readStreamOptional(final PathPair path) {
-        if (isOpen() && (deleteObject || deletePaths.contains(path))) {
+        if (isOpen() && deletePaths.contains(path)) {
             return Optional.empty();
         }
 
@@ -285,10 +297,12 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     private Optional<InputStream> readFromOcfl(final PathPair path) {
-        if (ocflRepo.containsObject(ocflObjectId)) {
-            final var object = ocflRepo.getObject(ObjectVersionId.head(ocflObjectId));
-            if (object.containsFile(path.path)) {
-                return Optional.of(object.getFile(path.path).getStream());
+        if (!(deleteObject && isOpen())) {
+            if (ocflRepo.containsObject(ocflObjectId)) {
+                final var object = ocflRepo.getObject(ObjectVersionId.head(ocflObjectId));
+                if (object.containsFile(path.path)) {
+                    return Optional.of(object.getFile(path.path).getStream());
+                }
             }
         }
         return Optional.empty();
