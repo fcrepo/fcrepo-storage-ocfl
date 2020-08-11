@@ -632,11 +632,8 @@ public class DefaultOcflObjectSessionTest {
 
     @Test(expected = NotFoundException.class)
     public void throwExceptionWhenListingVersionsOnResourceThatDoesNotExist() {
+        close(defaultAg());
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-
-        write(session, defaultAg());
-        session.commit();
-
         session.listVersions(DEFAULT_AG_BINARY_ID);
     }
 
