@@ -43,4 +43,9 @@ public interface OcflObjectSessionFactory {
      */
     Optional<OcflObjectSession> existingSession(final String sessionId);
 
+    /**
+     * Closes the underlying OCFL repository, and aborts all active sessions.
+     */
+    void close();
+
 }

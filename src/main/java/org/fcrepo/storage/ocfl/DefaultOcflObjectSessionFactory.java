@@ -20,8 +20,11 @@ package org.fcrepo.storage.ocfl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import edu.wisc.library.ocfl.api.OcflRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,6 +37,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory {
 
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultOcflObjectSessionFactory.class);
+
     private final OcflRepository ocflRepo;
     private final Path stagingRoot;
     private final ObjectMapper objectMapper;
@@ -42,6 +47,8 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
     private final String defaultVersionUserAddress;
 
     private final Map<String, OcflObjectSession> sessions;
+
+    private boolean closed = false;
 
     public DefaultOcflObjectSessionFactory(final OcflRepository ocflRepo,
                                            final Path stagingRoot,
@@ -60,6 +67,8 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
 
     @Override
     public OcflObjectSession newSession(final String ocflObjectId) {
+        enforceOpen();
+
         final var sessionId = UUID.randomUUID().toString();
         final var session = new DefaultOcflObjectSession(
                 sessionId,
@@ -79,7 +88,30 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
 
     @Override
     public Optional<OcflObjectSession> existingSession(final String sessionId) {
+        enforceOpen();
         return Optional.ofNullable(sessions.get(sessionId));
+    }
+
+    @Override
+    public void close() {
+        if (!closed) {
+            closed = true;
+            final var sessions = new ArrayList<>(this.sessions.values());
+            sessions.forEach(session -> {
+                try {
+                    session.abort();
+                } catch (RuntimeException e) {
+                    LOG.warn("Failed to close session {} cleanly.", session.sessionId(), e);
+                }
+            });
+            ocflRepo.close();
+        }
+    }
+
+    private void enforceOpen() {
+        if (closed) {
+            throw new IllegalStateException("The session factory is closed!");
+        }
     }
 
 }
