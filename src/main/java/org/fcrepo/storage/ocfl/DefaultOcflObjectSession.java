@@ -22,8 +22,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import edu.wisc.library.ocfl.api.OcflObjectUpdater;
+import edu.wisc.library.ocfl.api.OcflObjectVersion;
 import edu.wisc.library.ocfl.api.OcflOption;
 import edu.wisc.library.ocfl.api.OcflRepository;
+import edu.wisc.library.ocfl.api.model.FileChangeType;
 import edu.wisc.library.ocfl.api.model.ObjectVersionId;
 import edu.wisc.library.ocfl.api.model.VersionInfo;
 import org.apache.commons.io.FileUtils;
@@ -38,9 +40,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -175,19 +180,40 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     @Override
     public ResourceHeaders readHeaders(final String resourceId) {
+        return readHeaders(resourceId, null);
+    }
+
+    @Override
+    public ResourceHeaders readHeaders(final String resourceId, final String versionNum) {
         final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));
-        final var headerStream = readStream(headerPath, resourceId);
+        final var headerStream = readStream(headerPath, resourceId, versionNum);
         return readHeaders(headerStream);
     }
 
     @Override
     public ResourceContent readContent(final String resourceId) {
-        final var headers = readHeaders(resourceId);
+        return readContent(resourceId, null);
+    }
+
+    @Override
+    public ResourceContent readContent(final String resourceId, final String versionNum) {
+        final var headers = readHeaders(resourceId, versionNum);
         Optional<InputStream> contentStream = Optional.empty();
         if (headers.getContentPath() != null) {
-            contentStream = Optional.of(readStream(encode(headers.getContentPath()), resourceId));
+            contentStream = Optional.of(readStream(encode(headers.getContentPath()), resourceId, versionNum));
         }
         return new ResourceContent(contentStream, headers);
+    }
+
+    @Override
+    public List<OcflVersionInfo> listVersions(final String resourceId) {
+        final var headerPath = PersistencePaths.headerPath(rootResourceId(), resourceId);
+
+        if (!fileExists(headerPath)) {
+            throw new NotFoundException(String.format("Resource %s was not found.", resourceId));
+        }
+
+        return listFileVersions(resourceId, headerPath);
     }
 
     @Override
@@ -268,18 +294,18 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         return paths;
     }
 
-    private InputStream readStream(final PathPair path, final String resourceId) {
-        return readStreamOptional(path)
+    private InputStream readStream(final PathPair path, final String resourceId, final String versionNumber) {
+        return readStreamOptional(path, versionNumber)
                 .orElseThrow(() -> new NotFoundException(String.format("File %s was not found for resource %s",
                         path, resourceId)));
     }
 
-    private Optional<InputStream> readStreamOptional(final PathPair path) {
+    private Optional<InputStream> readStreamOptional(final PathPair path, final String versionNumber) {
         if (isOpen() && deletePaths.contains(path)) {
             return Optional.empty();
         }
 
-        return readFromStaging(path).or(() -> readFromOcfl(path));
+        return readFromStaging(path).or(() -> readFromOcfl(path, versionNumber));
     }
 
     private Optional<InputStream> readFromStaging(final PathPair path) {
@@ -296,14 +322,23 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         return Optional.empty();
     }
 
-    private Optional<InputStream> readFromOcfl(final PathPair path) {
-        if (!(deleteObject && isOpen())) {
-            if (ocflRepo.containsObject(ocflObjectId)) {
-                final var object = ocflRepo.getObject(ObjectVersionId.head(ocflObjectId));
-                if (object.containsFile(path.path)) {
-                    return Optional.of(object.getFile(path.path).getStream());
+    private Optional<InputStream> readFromOcfl(final PathPair path, final String versionNumber) {
+        try {
+            if (!(deleteObject && isOpen())) {
+                if (ocflRepo.containsObject(ocflObjectId)) {
+                    final OcflObjectVersion object;
+                    if (versionNumber == null) {
+                        object = ocflRepo.getObject(ObjectVersionId.head(ocflObjectId));
+                    } else {
+                        object = ocflRepo.getObject(ObjectVersionId.version(ocflObjectId, versionNumber));
+                    }
+                    if (object.containsFile(path.path)) {
+                        return Optional.of(object.getFile(path.path).getStream());
+                    }
                 }
             }
+        } catch (edu.wisc.library.ocfl.api.exception.NotFoundException e) {
+            return Optional.empty();
         }
         return Optional.empty();
     }
@@ -362,6 +397,27 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         }
     }
 
+    private List<OcflVersionInfo> listFileVersions(final String resourceId, final String headerPath) {
+        final var headDesc = ocflRepo.describeVersion(ObjectVersionId.head(ocflObjectId));
+
+        return ocflRepo.fileChangeHistory(ocflObjectId, headerPath).getFileChanges().stream()
+                .filter(change -> change.getChangeType() == FileChangeType.UPDATE)
+                // do not include changes that were made in the mutable head
+                .filter(change -> !(headDesc.isMutable() && headDesc.getVersionId().equals(change.getVersionId())))
+                .map(change -> {
+                    return new OcflVersionInfo(resourceId, ocflObjectId,
+                            change.getVersionId().toString(),
+                            toMementoInstant(change.getTimestamp()));
+                }).collect(Collectors.toList());
+    }
+
+    private boolean fileExists(final String path) {
+        if (ocflRepo.containsObject(ocflObjectId)) {
+            return ocflRepo.describeVersion(ObjectVersionId.head(ocflObjectId)).containsFile(path);
+        }
+        return false;
+    }
+
     private boolean newInSession(final PathPair headerPath) {
         if (ocflRepo.containsObject(ocflObjectId)) {
             return !ocflRepo.describeVersion(ObjectVersionId.head(ocflObjectId)).containsFile(headerPath.path);
@@ -378,7 +434,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
      */
     private String loadRootResourceId() {
         if (ocflRepo.containsObject(ocflObjectId)) {
-            final var stream = readFromOcfl(encode(PersistencePaths.ROOT_HEADER_PATH));
+            final var stream = readFromOcfl(encode(PersistencePaths.ROOT_HEADER_PATH), null);
 
             if (stream.isPresent()) {
                 final var headers = readHeaders(stream.get());
@@ -467,6 +523,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
             throw new IllegalStateException(
                     String.format("Session %s is already closed!", sessionId));
         }
+    }
+
+    private Instant toMementoInstant(final OffsetDateTime timestamp) {
+        return timestamp.toInstant().truncatedTo(ChronoUnit.SECONDS);
     }
 
     private static class PathPair {

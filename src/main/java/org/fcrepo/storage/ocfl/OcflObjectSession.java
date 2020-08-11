@@ -20,6 +20,7 @@ package org.fcrepo.storage.ocfl;
 
 import java.io.InputStream;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 /**
  * Session interface over an OCFL object. Changes to the object are accumulated in a staging directory until the
@@ -73,6 +74,16 @@ public interface OcflObjectSession {
     ResourceHeaders readHeaders(final String resourceId);
 
     /**
+     * Reads a specfic version of a resource's header file.
+     *
+     * @param resourceId the Fedora resource id to read
+     * @param versionNumber the version to read
+     * @return the resource's headers
+     * @throws NotFoundException if the resource cannot be found
+     */
+    ResourceHeaders readHeaders(final String resourceId, final String versionNumber);
+
+    /**
      * Reads a resource's content.
      *
      * @param resourceId the Fedora resource id to read
@@ -80,6 +91,25 @@ public interface OcflObjectSession {
      * @throws NotFoundException if the resource cannot be found
      */
     ResourceContent readContent(final String resourceId);
+
+    /**
+     * Reads a specific version of a resource's content.
+     *
+     * @param resourceId the Fedora resource id to read
+     * @param versionNumber the version to read
+     * @return the resource's content
+     * @throws NotFoundException if the resource cannot be found
+     */
+    ResourceContent readContent(final String resourceId, final String versionNumber);
+
+    /**
+     * List all of the versions associated to the resource in chrolological order.
+     *
+     * @param resourceId the Fedora resource id
+     * @return list of versions
+     * @throws NotFoundException if the resource cannot be found
+     */
+    List<OcflVersionInfo> listVersions(final String resourceId);
 
     /**
      * Sets the timestamp that's stamped on the OCFL version. If this value is not set, the current system time

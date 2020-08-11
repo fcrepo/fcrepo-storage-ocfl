@@ -42,8 +42,11 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -572,7 +575,7 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void writeFileWithNullContent() {
         final var resourceId = "info:fedora/foo";
-        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        final var session = sessionFactory.newSession(resourceId);
 
         final var content = atomicBinary(resourceId, ROOT, null);
 
@@ -586,6 +589,87 @@ public class DefaultOcflObjectSessionTest {
         final var committedContent = session.readContent(resourceId);
         assertResourceContent(null, content, committedContent);
         assertNull(content.getHeaders().getContentPath());
+    }
+
+    @Test
+    public void listAgVersions() {
+        final var binary2Id = DEFAULT_AG_ID + "/baz";
+
+        final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        write(session1, ag(DEFAULT_AG_ID, ROOT, "ag"));
+        write(session1, binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "binary"));
+        session1.commit();
+
+        final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        write(session2, binary(binary2Id, DEFAULT_AG_ID, "binary2"));
+        session2.commit();
+
+        final var session3 = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        write(session3, binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "updated"));
+        session3.commit();
+
+        assertThat(session3.listVersions(DEFAULT_AG_ID).stream()
+                .map(OcflVersionInfo::getVersionNumber)
+                .collect(Collectors.toList()), contains("v1"));
+
+        assertThat(session3.listVersions(DEFAULT_AG_BINARY_ID).stream()
+                .map(OcflVersionInfo::getVersionNumber)
+                .collect(Collectors.toList()), contains("v1", "v3"));
+
+        assertThat(session3.listVersions(binary2Id).stream()
+                .map(OcflVersionInfo::getVersionNumber)
+                .collect(Collectors.toList()), contains("v2"));
+    }
+
+    @Test(expected = NotFoundException.class)
+    public void throwExceptionWhenListingVersionsOnObjectThatDoesNotExist() {
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        session.listVersions(DEFAULT_AG_ID);
+    }
+
+    @Test(expected = NotFoundException.class)
+    public void throwExceptionWhenListingVersionsOnResourceThatDoesNotExist() {
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        write(session, defaultAg());
+        session.commit();
+
+        session.listVersions(DEFAULT_AG_BINARY_ID);
+    }
+
+    @Test
+    public void readPreviousVersion() {
+        final var resourceId = "info:fedora/foo";
+
+        final var first = atomicBinary(resourceId, ROOT, "first");
+        final var second = atomicBinary(resourceId, ROOT, "second");
+        final var third = atomicBinary(resourceId, ROOT, "third");
+
+        final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session1, first);
+        session1.commit();
+
+        final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session2, second);
+        session2.commit();
+
+        final var session3 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session3, third);
+        session3.commit();
+
+        assertResourceContent("first", first, session3.readContent(resourceId, "v1"));
+        assertResourceContent("second", second, session3.readContent(resourceId, "v2"));
+        assertResourceContent("third", third, session3.readContent(resourceId, "v3"));
+
+        try {
+            session3.readContent(resourceId, "v4");
+            fail("Expected an exception because the version should not exist");
+        } catch (NotFoundException e) {
+            // expected exception
+        }
     }
 
     private void assertResourceContent(final String content,
