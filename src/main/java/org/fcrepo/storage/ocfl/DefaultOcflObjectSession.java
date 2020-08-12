@@ -22,7 +22,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import edu.wisc.library.ocfl.api.OcflObjectUpdater;
-import edu.wisc.library.ocfl.api.OcflObjectVersion;
 import edu.wisc.library.ocfl.api.OcflOption;
 import edu.wisc.library.ocfl.api.OcflRepository;
 import edu.wisc.library.ocfl.api.model.FileChangeType;
@@ -326,12 +325,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         try {
             if (!(deleteObject && isOpen())) {
                 if (ocflRepo.containsObject(ocflObjectId)) {
-                    final OcflObjectVersion object;
-                    if (versionNumber == null) {
-                        object = ocflRepo.getObject(ObjectVersionId.head(ocflObjectId));
-                    } else {
-                        object = ocflRepo.getObject(ObjectVersionId.version(ocflObjectId, versionNumber));
-                    }
+                    final var object = ocflRepo.getObject(ObjectVersionId.version(ocflObjectId, versionNumber));
                     if (object.containsFile(path.path)) {
                         return Optional.of(object.getFile(path.path).getStream());
                     }
