@@ -135,6 +135,13 @@ public interface OcflObjectSession {
     void versionMessage(final String message);
 
     /**
+     * Sets the commit behavior -- create a new version or update the mutable HEAD.
+     *
+     * @param commitType the commit behavior
+     */
+    void commitType(final CommitType commitType);
+
+    /**
      * Commits the session, persisting all changes to a new OCFL version.
      */
     void commit();

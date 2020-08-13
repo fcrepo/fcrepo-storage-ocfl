@@ -21,7 +21,7 @@ package org.fcrepo.storage.ocfl;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import edu.wisc.library.ocfl.api.OcflRepository;
+import edu.wisc.library.ocfl.api.MutableOcflRepository;
 import edu.wisc.library.ocfl.core.OcflRepositoryBuilder;
 import edu.wisc.library.ocfl.core.extension.storage.layout.config.HashedTruncatedNTupleConfig;
 import edu.wisc.library.ocfl.core.path.mapper.LogicalPathMappers;
@@ -52,7 +52,7 @@ public class DefaultOcflObjectSessionFactoryTest {
     private Path ocflRoot;
     private Path sessionStaging;
 
-    private OcflRepository ocflRepo;
+    private MutableOcflRepository ocflRepo;
     private OcflObjectSessionFactory sessionFactory;
 
     private static final String DEFAULT_MESSAGE = "F6 migration";
@@ -73,7 +73,7 @@ public class DefaultOcflObjectSessionFactoryTest {
                 .logicalPathMapper(logicalPathMapper)
                 .storage(FileSystemOcflStorage.builder().repositoryRoot(ocflRoot).build())
                 .workDir(ocflTemp)
-                .build();
+                .buildMutable();
 
         final var objectMapper = new ObjectMapper()
                 .configure(WRITE_DATES_AS_TIMESTAMPS, false)
@@ -81,7 +81,7 @@ public class DefaultOcflObjectSessionFactoryTest {
                 .setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
         sessionFactory = new DefaultOcflObjectSessionFactory(ocflRepo, sessionStaging, objectMapper,
-                DEFAULT_MESSAGE, DEFAULT_USER, DEFAULT_ADDRESS);
+                CommitType.NEW_VERSION, DEFAULT_MESSAGE, DEFAULT_USER, DEFAULT_ADDRESS);
     }
 
     @Test

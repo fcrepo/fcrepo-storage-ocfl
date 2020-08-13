@@ -19,13 +19,14 @@
 package org.fcrepo.storage.ocfl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import edu.wisc.library.ocfl.api.OcflRepository;
+import edu.wisc.library.ocfl.api.MutableOcflRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,9 +40,10 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
 
     private static final Logger LOG = LoggerFactory.getLogger(DefaultOcflObjectSessionFactory.class);
 
-    private final OcflRepository ocflRepo;
+    private final MutableOcflRepository ocflRepo;
     private final Path stagingRoot;
     private final ObjectMapper objectMapper;
+    private final CommitType defaultCommitType;
     private final String defaultVersionMessage;
     private final String defaultVersionUserName;
     private final String defaultVersionUserAddress;
@@ -50,15 +52,17 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
 
     private boolean closed = false;
 
-    public DefaultOcflObjectSessionFactory(final OcflRepository ocflRepo,
+    public DefaultOcflObjectSessionFactory(final MutableOcflRepository ocflRepo,
                                            final Path stagingRoot,
                                            final ObjectMapper objectMapper,
+                                           final CommitType defaultCommitType,
                                            final String defaultVersionMessage,
                                            final String defaultVersionUserName,
                                            final String defaultVersionUserAddress) {
-        this.ocflRepo = ocflRepo;
-        this.stagingRoot = stagingRoot;
-        this.objectMapper = objectMapper;
+        this.ocflRepo = Objects.requireNonNull(ocflRepo, "ocflRepo cannot be null");
+        this.stagingRoot = Objects.requireNonNull(stagingRoot, "stagingRoot cannot be null");
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper cannot be null");
+        this.defaultCommitType = Objects.requireNonNull(defaultCommitType, "defaultCommitType cannot be null");
         this.defaultVersionMessage = defaultVersionMessage;
         this.defaultVersionUserName = defaultVersionUserName;
         this.defaultVersionUserAddress = defaultVersionUserAddress;
@@ -76,6 +80,7 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
                 ocflObjectId,
                 stagingRoot.resolve(sessionId),
                 objectMapper,
+                defaultCommitType,
                 () -> sessions.remove(sessionId)
         );
 
