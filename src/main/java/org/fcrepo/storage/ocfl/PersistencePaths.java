@@ -128,6 +128,16 @@ public final class PersistencePaths {
         return new PersistencePaths(contentPath, headerPath);
     }
 
+    /**
+     * Returns true if the path is a resource header file.
+     *
+     * @param path file path
+     * @return true if it's a resource header file
+     */
+    public static boolean isHeaderFile(final String path) {
+        return path.startsWith(HEADER_DIR);
+    }
+
     private static String resolveContentPath(final boolean isContainer, final IdInfo info) {
         if (info.isRoot) {
             if (isContainer) {

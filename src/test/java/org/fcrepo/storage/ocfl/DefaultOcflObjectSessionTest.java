@@ -815,6 +815,85 @@ public class DefaultOcflObjectSessionTest {
         assertResourceContent("second", content2, session2.readContent(resourceId, "v2"));
     }
 
+    @Test
+    public void listResourcesWhenOnlyOneWithNothingStaged() {
+        final var ag = defaultAg();
+        close(ag);
+
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
+
+        assertThat(resources, containsInAnyOrder(ag.getHeaders()));
+    }
+
+    @Test
+    public void listResourcesWhenMultipleWithNothingStaged() {
+        final var ag = defaultAg();
+        final var binary = defaultAgBinary();
+        close(ag);
+        close(binary);
+
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
+
+        assertThat(resources, containsInAnyOrder(ag.getHeaders(), binary.getHeaders()));
+    }
+
+    @Test
+    public void listResourcesWhenMultipleWithStagedChanges() {
+        final var ag = defaultAg();
+        final var binary = defaultAgBinary();
+        close(ag);
+        close(binary);
+
+        final var binaryUpdate = binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "updated!");
+
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session, binaryUpdate);
+
+        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
+
+        assertThat(resources, containsInAnyOrder(ag.getHeaders(), binaryUpdate.getHeaders()));
+    }
+
+    @Test
+    public void listResourcesWhenMultipleWithStagedDeletes() {
+        final var ag = defaultAg();
+        final var binary = defaultAgBinary();
+        close(ag);
+        close(binary);
+
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        session.deleteContentFile(binary.getHeaders());
+
+        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
+        assertThat(resources, containsInAnyOrder(ag.getHeaders(), binary.getHeaders()));
+
+        session.deleteResource(DEFAULT_AG_BINARY_ID);
+
+        final var resources2 = session.streamResourceHeaders().collect(Collectors.toList());
+        assertThat(resources2, containsInAnyOrder(ag.getHeaders()));
+    }
+
+    @Test
+    public void listResourceWhenNotCreated() {
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
+        assertEquals(0, resources.size());
+    }
+
+    @Test
+    public void listResourceWhenPendingDelete() {
+        close(defaultAg());
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        session.deleteResource(DEFAULT_AG_ID);
+        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
+        assertEquals(0, resources.size());
+    }
+
     private void assertResourceContent(final String content,
                                        final ResourceContent expected,
                                        final ResourceContent actual) {

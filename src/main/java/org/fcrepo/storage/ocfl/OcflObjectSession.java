@@ -21,6 +21,7 @@ package org.fcrepo.storage.ocfl;
 import java.io.InputStream;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Session interface over an OCFL object. Changes to the object are accumulated in a staging directory until the
@@ -110,6 +111,13 @@ public interface OcflObjectSession {
      * @throws NotFoundException if the resource cannot be found
      */
     List<OcflVersionInfo> listVersions(final String resourceId);
+
+    /**
+     * Returns the headers for all of the resources contained within an OCFL object. The results are unordered.
+     *
+     * @return resource headers
+     */
+    Stream<ResourceHeaders> streamResourceHeaders();
 
     /**
      * Sets the timestamp that's stamped on the OCFL version. If this value is not set, the current system time

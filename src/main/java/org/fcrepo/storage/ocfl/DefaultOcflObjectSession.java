@@ -26,6 +26,7 @@ import edu.wisc.library.ocfl.api.OcflObjectUpdater;
 import edu.wisc.library.ocfl.api.OcflOption;
 import edu.wisc.library.ocfl.api.model.DigestAlgorithm;
 import edu.wisc.library.ocfl.api.model.FileChangeType;
+import edu.wisc.library.ocfl.api.model.FileDetails;
 import edu.wisc.library.ocfl.api.model.ObjectVersionId;
 import edu.wisc.library.ocfl.api.model.VersionInfo;
 import org.apache.commons.codec.binary.Hex;
@@ -53,13 +54,18 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 /**
  * Default OcflObjectSession implementation.
@@ -67,6 +73,12 @@ import java.util.stream.Collectors;
  * @author pwinckles
  */
 public class DefaultOcflObjectSession implements OcflObjectSession {
+
+    private final int SPLITERATOR_OPTS = Spliterator.NONNULL |
+            Spliterator.DISTINCT |
+            Spliterator.SIZED |
+            Spliterator.SUBSIZED |
+            Spliterator.IMMUTABLE;
 
     private final String sessionId;
     private final MutableOcflRepository ocflRepo;
@@ -111,8 +123,6 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         this.rootResourceId = loadRootResourceId();
         this.digestAlgorithm = identifyObjectDigestAlgorithm();
     }
-
-    // TODO resource iteration
 
     @Override
     public String sessionId() {
@@ -255,6 +265,31 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         }
 
         return listFileVersions(resourceId, headerPath);
+    }
+
+    @Override
+    public Stream<ResourceHeaders> streamResourceHeaders() {
+        final var headerPaths = new HashSet<String>();
+
+        headerPaths.addAll(listStagedHeaders());
+        headerPaths.addAll(listCommittedHeaders());
+
+        deletePaths.forEach(path -> headerPaths.remove(path.path));
+
+        final var it = headerPaths.iterator();
+
+        return StreamSupport.stream(Spliterators.spliterator(new Iterator<>() {
+            @Override
+            public boolean hasNext() {
+                return it.hasNext();
+            }
+            @Override
+            public ResourceHeaders next() {
+                final var next = it.next();
+                return readHeaders(readStreamOptional(encode(next), null)
+                        .orElseThrow(() -> new IllegalStateException("Unable to find resource header file " + next)));
+            }
+        }, headerPaths.size(), SPLITERATOR_OPTS), false);
     }
 
     @Override
@@ -556,7 +591,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private void addDecodedPaths(final OcflObjectUpdater updater, final OcflOption... ocflOptions) {
         try (var paths = Files.walk(objectStaging)) {
             paths.filter(Files::isRegularFile).forEach(file -> {
-                final var logicalPath = windowsStagingPathToLogicalPath(file);
+                final var logicalPath = stagingPathToLogicalPath(file);
                 updater.addPath(file, logicalPath, ocflOptions);
             });
         } catch (IOException e) {
@@ -564,10 +599,41 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         }
     }
 
-    private String windowsStagingPathToLogicalPath(final Path path) {
-        final var normalized = objectStaging.relativize(path).toString()
-                .replace("\\", "/");
-        return URLDecoder.decode(normalized, StandardCharsets.UTF_8);
+    private String stagingPathToLogicalPath(final Path path) {
+        final var relative = objectStaging.relativize(path).toString();
+
+        if (SystemUtils.IS_OS_WINDOWS) {
+            return URLDecoder.decode(relative.replace("\\", "/"), StandardCharsets.UTF_8);
+        }
+
+        return relative;
+    }
+
+    private Set<String> listStagedHeaders() {
+        if (Files.exists(objectStaging)) {
+            try (var paths = Files.walk(objectStaging)) {
+                return paths.filter(Files::isRegularFile)
+                        .map(this::stagingPathToLogicalPath)
+                        .filter(PersistencePaths::isHeaderFile)
+                        .collect(Collectors.toSet());
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        return Collections.emptySet();
+    }
+
+    private Set<String> listCommittedHeaders() {
+        if (!(isOpen() && deleteObject) && ocflRepo.containsObject(ocflObjectId)) {
+            return ocflRepo.describeVersion(ObjectVersionId.head(ocflObjectId)).getFiles()
+                    .stream()
+                    .map(FileDetails::getPath)
+                    .filter(PersistencePaths::isHeaderFile)
+                    .collect(Collectors.toSet());
+        }
+
+        return Collections.emptySet();
     }
 
     private void cleanup() {
