@@ -46,7 +46,7 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
     private final Path stagingRoot;
     private final ObjectReader headerReader;
     private final ObjectWriter headerWriter;
-    private final CommitType defaultCommitType;
+    private CommitType defaultCommitType;
     private final String defaultVersionMessage;
     private final String defaultVersionUserName;
     private final String defaultVersionUserAddress;
@@ -122,6 +122,15 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
         if (closed) {
             throw new IllegalStateException("The session factory is closed!");
         }
+    }
+
+    /**
+     * Allows the default CommitType to be changed at run time -- useful for testing.
+     *
+     * @param defaultCommitType commit type
+     */
+    public void setDefaultCommitType(final CommitType defaultCommitType) {
+        this.defaultCommitType = Objects.requireNonNull(defaultCommitType, "defaultCommitType cannot be null");
     }
 
 }
