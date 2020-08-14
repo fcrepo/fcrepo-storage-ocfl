@@ -18,7 +18,6 @@
 
 package org.fcrepo.storage.ocfl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import edu.wisc.library.ocfl.api.MutableOcflRepository;
@@ -103,15 +102,16 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                                     final MutableOcflRepository ocflRepo,
                                     final String ocflObjectId,
                                     final Path objectStaging,
-                                    final ObjectMapper objectMapper,
+                                    final ObjectReader headerReader,
+                                    final ObjectWriter headerWriter,
                                     final CommitType commitType,
                                     final Runnable deregisterHook) {
         this.sessionId = Objects.requireNonNull(sessionId, "sessionId cannot be null");
         this.ocflRepo = Objects.requireNonNull(ocflRepo, "ocflRepo cannot be null");
         this.ocflObjectId = Objects.requireNonNull(ocflObjectId, "ocflObjectId cannot be null");
         this.objectStaging = Objects.requireNonNull(objectStaging, "objectStaging cannot be null");
-        this.headerReader = objectMapper.readerFor(ResourceHeaders.class);
-        this.headerWriter = objectMapper.writerFor(ResourceHeaders.class);
+        this.headerReader = Objects.requireNonNull(headerReader, "headerReader cannot be null");
+        this.headerWriter = Objects.requireNonNull(headerWriter, "headerWriter cannot be null");
         this.commitType = Objects.requireNonNull(commitType, "commitType cannot be null");
         this.deregisterHook = Objects.requireNonNull(deregisterHook, "deregisterHook cannot be null");
 
@@ -222,6 +222,27 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                 digests.remove(path);
             }
         }
+    }
+
+    @Override
+    public boolean containsResource(final String resourceId) {
+        if (rootResourceId == null) {
+            return false;
+        }
+
+        final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));
+        final var stream = readStreamOptional(headerPath, null);
+
+        if (stream.isPresent()) {
+            try {
+                stream.get().close();
+            } catch (IOException e) {
+                // Ignore
+            }
+            return true;
+        }
+
+        return false;
     }
 
     @Override
@@ -350,6 +371,11 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     @Override
+    public void close() {
+        abort();
+    }
+
+    @Override
     public boolean isOpen() {
         return !closed;
     }
@@ -384,6 +410,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private Optional<InputStream> readStreamOptional(final PathPair path, final String versionNumber) {
         if (isOpen() && deletePaths.contains(path)) {
             return Optional.empty();
+        }
+
+        if (versionNumber != null) {
+            return readFromOcfl(path, versionNumber);
         }
 
         return readFromStaging(path).or(() -> readFromOcfl(path, versionNumber));

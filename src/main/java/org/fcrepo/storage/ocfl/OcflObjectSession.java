@@ -29,7 +29,7 @@ import java.util.stream.Stream;
  *
  * @author pwinckles
  */
-public interface OcflObjectSession {
+public interface OcflObjectSession extends AutoCloseable {
 
     /**
      * @return the id of the session
@@ -64,6 +64,14 @@ public interface OcflObjectSession {
      * @param resourceId the Fedora resource id of the resource to delete
      */
     void deleteResource(final String resourceId);
+
+    /**
+     * Indicates if the resource exists.
+     *
+     * @param resourceId the Fedora resource id
+     * @return true if the resouce exists
+     */
+    boolean containsResource(final String resourceId);
 
     /**
      * Reads a resource's header file.

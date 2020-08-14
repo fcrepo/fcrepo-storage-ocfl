@@ -894,6 +894,97 @@ public class DefaultOcflObjectSessionTest {
         assertEquals(0, resources.size());
     }
 
+    @Test
+    public void containsResourceWhenExistsInOcfl() {
+        close(defaultAg());
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        assertTrue(session.containsResource(DEFAULT_AG_ID));
+    }
+
+    @Test
+    public void containsResourceWhenExistsInStaging() {
+        final var resourceId = "info:fedora/foo";
+
+        final var content = atomicBinary(resourceId, ROOT, "first");
+        final var session = sessionFactory.newSession(resourceId);
+
+        write(session, content);
+
+        assertTrue(session.containsResource(resourceId));
+    }
+
+    @Test
+    public void containsResourceWhenContentDeleted() {
+        final var resourceId = "info:fedora/foo";
+
+        final var content = atomicBinary(resourceId, ROOT, "first");
+        final var session = sessionFactory.newSession(resourceId);
+
+        write(session, content);
+        session.commit();
+
+        final var session2 = sessionFactory.newSession(resourceId);
+
+        session2.deleteContentFile(content.getHeaders());
+
+        assertTrue(session2.containsResource(resourceId));
+    }
+
+    @Test
+    public void notContainsResourceWhenPendingDelete() {
+        final var resourceId = "info:fedora/foo";
+
+        final var content = atomicBinary(resourceId, ROOT, "first");
+        final var session = sessionFactory.newSession(resourceId);
+
+        write(session, content);
+        session.commit();
+
+        final var session2 = sessionFactory.newSession(resourceId);
+
+        session2.deleteResource(resourceId);
+
+        assertFalse(session2.containsResource(resourceId));
+    }
+
+    @Test
+    public void notContainsResourceWhenObjectNotExists() {
+        final var resourceId = "info:fedora/foo";
+        final var session = sessionFactory.newSession(resourceId);
+        assertFalse(session.containsResource(resourceId));
+    }
+
+    @Test
+    public void notContainsResourceWhenNotExists() {
+        close(defaultAg());
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        assertFalse(session.containsResource(DEFAULT_AG_BINARY_ID));
+    }
+
+    @Test
+    public void readPreviousVersionWhenHasChangesPending() {
+        final var resourceId = "info:fedora/foo";
+
+        final var first = atomicBinary(resourceId, ROOT, "first");
+        final var second = atomicBinary(resourceId, ROOT, "second");
+        final var third = atomicBinary(resourceId, ROOT, "third");
+
+        final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session1, first);
+        session1.commit();
+
+        final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session2, second);
+        session2.commit();
+
+        final var session3 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session3, third);
+
+        assertResourceContent("first", first, session3.readContent(resourceId, "v1"));
+        assertResourceContent("second", second, session3.readContent(resourceId, "v2"));
+        assertResourceContent("third", third, session3.readContent(resourceId));
+    }
+
     private void assertResourceContent(final String content,
                                        final ResourceContent expected,
                                        final ResourceContent actual) {
