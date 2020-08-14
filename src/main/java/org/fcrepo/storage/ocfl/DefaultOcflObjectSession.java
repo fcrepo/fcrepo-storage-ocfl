@@ -342,21 +342,23 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
             ocflRepo.purgeObject(ocflObjectId);
         }
 
+        final var hasMutableHead = ocflRepo.hasStagedChanges(ocflObjectId);
+
         if (!deletePaths.isEmpty() || Files.exists(objectStaging)) {
             deletePathsFromStaging();
 
             final var updater = createObjectUpdater();
 
             if (commitType == CommitType.UNVERSIONED
-                    || (commitType == CommitType.NEW_VERSION && ocflRepo.hasStagedChanges(ocflObjectId))) {
+                    || (commitType == CommitType.NEW_VERSION && hasMutableHead)) {
                 ocflRepo.stageChanges(ObjectVersionId.head(ocflObjectId), versionInfo, updater);
-
-                if (commitType == CommitType.NEW_VERSION) {
-                    ocflRepo.commitStagedChanges(ocflObjectId, versionInfo);
-                }
             } else {
                 ocflRepo.updateObject(ObjectVersionId.head(ocflObjectId), versionInfo, updater);
             }
+        }
+
+        if (commitType == CommitType.NEW_VERSION && hasMutableHead) {
+            ocflRepo.commitStagedChanges(ocflObjectId, versionInfo);
         }
 
         cleanup();
