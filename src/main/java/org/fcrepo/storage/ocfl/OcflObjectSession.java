@@ -66,10 +66,10 @@ public interface OcflObjectSession extends AutoCloseable {
     void deleteResource(final String resourceId);
 
     /**
-     * Indicates if the resource exists.
+     * Indicates if the resource exists in the session
      *
      * @param resourceId the Fedora resource id
-     * @return true if the resouce exists
+     * @return true if the resource exists in the session
      */
     boolean containsResource(final String resourceId);
 
@@ -83,10 +83,10 @@ public interface OcflObjectSession extends AutoCloseable {
     ResourceHeaders readHeaders(final String resourceId);
 
     /**
-     * Reads a specfic version of a resource's header file.
+     * Reads a specific version of a resource's header file.
      *
      * @param resourceId the Fedora resource id to read
-     * @param versionNumber the version to read
+     * @param versionNumber the version to read, or null for HEAD
      * @return the resource's headers
      * @throws NotFoundException if the resource cannot be found
      */
@@ -105,7 +105,7 @@ public interface OcflObjectSession extends AutoCloseable {
      * Reads a specific version of a resource's content.
      *
      * @param resourceId the Fedora resource id to read
-     * @param versionNumber the version to read
+     * @param versionNumber the version to read, or null for HEAD
      * @return the resource's content
      * @throws NotFoundException if the resource cannot be found
      */

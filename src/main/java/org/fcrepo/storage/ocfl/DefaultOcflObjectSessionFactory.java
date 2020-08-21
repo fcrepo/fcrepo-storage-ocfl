@@ -64,7 +64,8 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
                                            final String defaultVersionUserAddress) {
         this.ocflRepo = Objects.requireNonNull(ocflRepo, "ocflRepo cannot be null");
         this.stagingRoot = Objects.requireNonNull(stagingRoot, "stagingRoot cannot be null");
-        this.headerReader = objectMapper.readerFor(ResourceHeaders.class);
+        this.headerReader = Objects.requireNonNull(objectMapper, "objectMapper cannot be null")
+                .readerFor(ResourceHeaders.class);
         this.headerWriter = objectMapper.writerFor(ResourceHeaders.class);
         this.defaultCommitType = Objects.requireNonNull(defaultCommitType, "defaultCommitType cannot be null");
         this.defaultVersionMessage = defaultVersionMessage;

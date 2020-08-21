@@ -47,7 +47,6 @@ import java.security.DigestInputStream;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -350,14 +349,16 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
             final var updater = createObjectUpdater();
 
             if (commitType == CommitType.UNVERSIONED
-                    || (commitType == CommitType.NEW_VERSION && hasMutableHead)) {
+                    || hasMutableHeadAndShouldCreateNewVersion(hasMutableHead)) {
+                // Stage updates to mutable HEAD when auto-versioning disabled, or immediately before committing the
+                // mutable HEAD to a version when auto-versioning is enabled.
                 ocflRepo.stageChanges(ObjectVersionId.head(ocflObjectId), versionInfo, updater);
             } else {
                 ocflRepo.updateObject(ObjectVersionId.head(ocflObjectId), versionInfo, updater);
             }
         }
 
-        if (commitType == CommitType.NEW_VERSION && hasMutableHead) {
+        if (hasMutableHeadAndShouldCreateNewVersion(hasMutableHead)) {
             ocflRepo.commitStagedChanges(ocflObjectId, versionInfo);
         }
 
@@ -707,9 +708,6 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     private void addDigestHeader(final String digest, final ResourceHeaders headers) {
-        if (headers.getDigests() == null) {
-            headers.setDigests(new ArrayList<>());
-        }
         headers.getDigests().add(digestUri(digest));
     }
 
@@ -727,6 +725,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         } else {
             return ocflRepo.config().getDefaultDigestAlgorithm();
         }
+    }
+
+    private boolean hasMutableHeadAndShouldCreateNewVersion(final boolean hasMutableHead) {
+        return commitType == CommitType.NEW_VERSION && hasMutableHead;
     }
 
     private static class PathPair {
