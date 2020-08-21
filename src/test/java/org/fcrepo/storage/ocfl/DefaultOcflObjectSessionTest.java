@@ -41,6 +41,7 @@ import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -53,6 +54,8 @@ import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.empty;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -1030,6 +1033,38 @@ public class DefaultOcflObjectSessionTest {
         session.touchResource(DEFAULT_AG_ID);
     }
 
+    @Test
+    public void failWriteWhenContentSizeDoesNotMatch() {
+        final var resourceId = "info:fedora/foo";
+        final var content = atomicBinary(resourceId, ROOT, "first");
+        content.getHeaders().setContentSize(1024L);
+
+        final var session = sessionFactory.newSession(resourceId);
+
+        try {
+            write(session, content);
+            fail("should have thrown an exception");
+        } catch (RuntimeException e) {
+            assertThat(e.getMessage(), containsString("file size does not match"));
+        }
+    }
+
+    @Test
+    public void contentWriteFailuresShouldCleanupStagedFiles() throws IOException {
+        final var resourceId = "info:fedora/foo";
+        final var content = atomicBinary(resourceId, ROOT, "first");
+        content.getHeaders().setContentSize(1024L);
+
+        final var session = sessionFactory.newSession(resourceId);
+
+        try {
+            write(session, content);
+            fail("should have thrown an exception");
+        } catch (RuntimeException e) {
+            assertThat(recursiveList(sessionStaging), empty());
+        }
+    }
+
     private void assertResourceContent(final String content,
                                        final ResourceContent expected,
                                        final ResourceContent actual) {
@@ -1172,6 +1207,14 @@ public class DefaultOcflObjectSessionTest {
             content.close();
         } catch (Exception e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    private List<Path> recursiveList(final Path root) {
+        try (var walk = Files.walk(root)) {
+            return walk.filter(Files::isRegularFile).collect(Collectors.toList());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 

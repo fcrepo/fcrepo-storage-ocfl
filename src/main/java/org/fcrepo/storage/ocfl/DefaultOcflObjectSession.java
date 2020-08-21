@@ -31,6 +31,8 @@ import edu.wisc.library.ocfl.api.model.VersionInfo;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.SystemUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -72,7 +74,9 @@ import java.util.stream.StreamSupport;
  */
 public class DefaultOcflObjectSession implements OcflObjectSession {
 
-    private final int SPLITERATOR_OPTS = Spliterator.NONNULL |
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultOcflObjectSession.class);
+
+    private static final int SPLITERATOR_OPTS = Spliterator.NONNULL |
             Spliterator.DISTINCT |
             Spliterator.SIZED |
             Spliterator.SUBSIZED |
@@ -142,30 +146,47 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         final var contentPath = encode(paths.getContentFilePath());
         final var headerPath = encode(paths.getHeaderFilePath());
 
+        final var contentDst = createStagingPath(contentPath);
+        final var headerDst = createStagingPath(headerPath);
+
         deletePaths.remove(contentPath);
         deletePaths.remove(headerPath);
 
-        if (content != null) {
-            final var contentDst = createStagingPath(contentPath);
-            var digest = getOcflDigest(headers.getDigests());
+        try {
+            if (content != null) {
+                var digest = getOcflDigest(headers.getDigests());
 
-            if (digest == null) {
-                final var messageDigest = digestAlgorithm.getMessageDigest();
-                write(new DigestInputStream(content, messageDigest), contentDst);
-                digest = Hex.encodeHexString(messageDigest.digest());
-                addDigestHeader(digest, headers);
-            } else {
-                write(content, contentDst);
+                if (digest == null) {
+                    // compute the digest that OCFL uses if it was not provided
+                    final var messageDigest = digestAlgorithm.getMessageDigest();
+                    write(new DigestInputStream(content, messageDigest), contentDst);
+                    digest = Hex.encodeHexString(messageDigest.digest());
+                    addDigestHeader(digest, headers);
+                } else {
+                    write(content, contentDst);
+                }
+
+                digests.put(contentPath, digest);
+
+                final var fileSize = fileSize(contentDst);
+
+                if (headers.getContentSize() != null
+                        && fileSize != headers.getContentSize()) {
+                    throw new RuntimeException(String.format("Resource %s's file size does not match expectation." +
+                                    " Expected: %s; Actual: %s",
+                            headers.getId(), headers.getContentSize(), fileSize));
+                }
+
+                headers.setContentPath(contentPath.path);
+                headers.setContentSize(fileSize);
             }
 
-            digests.put(contentPath, digest);
-
-            headers.setContentPath(contentPath.path);
-            headers.setContentSize(fileSize(contentDst));
+            writeHeaders(headers, headerDst);
+        } catch (RuntimeException e) {
+            safeDelete(contentDst);
+            safeDelete(headerDst);
+            throw e;
         }
-
-        final var headerDst = createStagingPath(headerPath);
-        writeHeaders(headers, headerDst);
     }
 
     @Override
@@ -519,12 +540,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     private void deletePathsFromStaging() {
         deletePaths.stream().map(this::stagingPath).forEach(path -> {
-            if (Files.exists(path)) {
-                try {
-                    Files.delete(path);
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
+            try {
+                Files.deleteIfExists(path);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
             }
         });
     }
@@ -742,6 +761,14 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     private boolean hasMutableHeadAndShouldCreateNewVersion(final boolean hasMutableHead) {
         return commitType == CommitType.NEW_VERSION && hasMutableHead;
+    }
+
+    private void safeDelete(final Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException e) {
+            LOG.error("Failed to delete staged file: {}", path);
+        }
     }
 
     private static class PathPair {
