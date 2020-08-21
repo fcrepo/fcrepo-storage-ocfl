@@ -50,6 +50,13 @@ public interface OcflObjectSession extends AutoCloseable {
     void writeResource(final ResourceHeaders headers, final InputStream content);
 
     /**
+     * Updates the last modified timestamp on the specified resource
+     *
+     * @param resourceId the resource to touch
+     */
+    void touchResource(final String resourceId);
+
+    /**
      * Deletes a content file from the session, and updates the associated headers. If the resource was added in
      * the current session, then its headers are also deleted and it is as if the resource never existed.
      *

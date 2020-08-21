@@ -55,6 +55,7 @@ import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -983,6 +984,50 @@ public class DefaultOcflObjectSessionTest {
         assertResourceContent("first", first, session3.readContent(resourceId, "v1"));
         assertResourceContent("second", second, session3.readContent(resourceId, "v2"));
         assertResourceContent("third", third, session3.readContent(resourceId));
+    }
+
+    @Test
+    public void touchLastModifiedDateOnExistingResource() {
+        close(defaultAg());
+
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        final var original = session.readHeaders(DEFAULT_AG_ID).getLastModifiedDate();
+
+        session.touchResource(DEFAULT_AG_ID);
+        session.commit();
+
+        final var touched = session.readHeaders(DEFAULT_AG_ID).getLastModifiedDate();
+
+        assertNotEquals(original, touched);
+        assertEquals(2, session.listVersions(DEFAULT_AG_ID).size());
+    }
+
+    @Test
+    public void touchLastModifiedDateOnStagedResource() {
+        final var resourceId = "info:fedora/foo";
+        final var content = atomicBinary(resourceId, ROOT, "first");
+
+        final var session = sessionFactory.newSession(resourceId);
+
+        write(session, content);
+
+        final var original = session.readHeaders(resourceId).getLastModifiedDate();
+
+        session.touchResource(resourceId);
+        session.commit();
+
+        final var touched = session.readHeaders(resourceId).getLastModifiedDate();
+
+        assertNotEquals(original, touched);
+        assertEquals(1, session.listVersions(resourceId).size());
+    }
+
+    @Test(expected = NotFoundException.class)
+    public void failTouchWhenResourceDoesNotExist() {
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        session.touchResource(DEFAULT_AG_ID);
     }
 
     private void assertResourceContent(final String content,
