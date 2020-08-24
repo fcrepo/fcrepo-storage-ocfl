@@ -21,7 +21,7 @@ package org.fcrepo.storage.ocfl;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import edu.wisc.library.ocfl.api.OcflRepository;
+import edu.wisc.library.ocfl.api.MutableOcflRepository;
 import edu.wisc.library.ocfl.core.OcflRepositoryBuilder;
 import edu.wisc.library.ocfl.core.extension.storage.layout.config.HashedTruncatedNTupleConfig;
 import edu.wisc.library.ocfl.core.path.mapper.LogicalPathMappers;
@@ -37,6 +37,7 @@ import java.nio.file.Path;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -51,7 +52,7 @@ public class DefaultOcflObjectSessionFactoryTest {
     private Path ocflRoot;
     private Path sessionStaging;
 
-    private OcflRepository ocflRepo;
+    private MutableOcflRepository ocflRepo;
     private OcflObjectSessionFactory sessionFactory;
 
     private static final String DEFAULT_MESSAGE = "F6 migration";
@@ -72,7 +73,7 @@ public class DefaultOcflObjectSessionFactoryTest {
                 .logicalPathMapper(logicalPathMapper)
                 .storage(FileSystemOcflStorage.builder().repositoryRoot(ocflRoot).build())
                 .workDir(ocflTemp)
-                .build();
+                .buildMutable();
 
         final var objectMapper = new ObjectMapper()
                 .configure(WRITE_DATES_AS_TIMESTAMPS, false)
@@ -80,7 +81,7 @@ public class DefaultOcflObjectSessionFactoryTest {
                 .setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
         sessionFactory = new DefaultOcflObjectSessionFactory(ocflRepo, sessionStaging, objectMapper,
-                DEFAULT_MESSAGE, DEFAULT_USER, DEFAULT_ADDRESS);
+                CommitType.NEW_VERSION, DEFAULT_MESSAGE, DEFAULT_USER, DEFAULT_ADDRESS);
     }
 
     @Test
@@ -109,6 +110,17 @@ public class DefaultOcflObjectSessionFactoryTest {
         final var session2 = sessionFactory.existingSession(session1.sessionId());
 
         assertTrue(session2.isEmpty());
+    }
+
+    @Test
+    public void closeFactoryAndAllActiveSessions() {
+        final var session1 = sessionFactory.newSession("obj1");
+        final var session2 = sessionFactory.newSession("obj2");
+
+        sessionFactory.close();
+
+        assertFalse(session1.isOpen());
+        assertFalse(session2.isOpen());
     }
 
 }

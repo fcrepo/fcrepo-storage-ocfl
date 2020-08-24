@@ -20,6 +20,8 @@ package org.fcrepo.storage.ocfl;
 
 import java.io.InputStream;
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Session interface over an OCFL object. Changes to the object are accumulated in a staging directory until the
@@ -27,7 +29,7 @@ import java.time.OffsetDateTime;
  *
  * @author pwinckles
  */
-public interface OcflObjectSession {
+public interface OcflObjectSession extends AutoCloseable {
 
     /**
      * @return the id of the session
@@ -64,6 +66,14 @@ public interface OcflObjectSession {
     void deleteResource(final String resourceId);
 
     /**
+     * Indicates if the resource exists in the session
+     *
+     * @param resourceId the Fedora resource id
+     * @return true if the resource exists in the session
+     */
+    boolean containsResource(final String resourceId);
+
+    /**
      * Reads a resource's header file.
      *
      * @param resourceId the Fedora resource id to read
@@ -73,6 +83,16 @@ public interface OcflObjectSession {
     ResourceHeaders readHeaders(final String resourceId);
 
     /**
+     * Reads a specific version of a resource's header file.
+     *
+     * @param resourceId the Fedora resource id to read
+     * @param versionNumber the version to read, or null for HEAD
+     * @return the resource's headers
+     * @throws NotFoundException if the resource cannot be found
+     */
+    ResourceHeaders readHeaders(final String resourceId, final String versionNumber);
+
+    /**
      * Reads a resource's content.
      *
      * @param resourceId the Fedora resource id to read
@@ -80,6 +100,32 @@ public interface OcflObjectSession {
      * @throws NotFoundException if the resource cannot be found
      */
     ResourceContent readContent(final String resourceId);
+
+    /**
+     * Reads a specific version of a resource's content.
+     *
+     * @param resourceId the Fedora resource id to read
+     * @param versionNumber the version to read, or null for HEAD
+     * @return the resource's content
+     * @throws NotFoundException if the resource cannot be found
+     */
+    ResourceContent readContent(final String resourceId, final String versionNumber);
+
+    /**
+     * List all of the versions associated to the resource in chrolological order.
+     *
+     * @param resourceId the Fedora resource id
+     * @return list of versions
+     * @throws NotFoundException if the resource cannot be found
+     */
+    List<OcflVersionInfo> listVersions(final String resourceId);
+
+    /**
+     * Returns the headers for all of the resources contained within an OCFL object. The results are unordered.
+     *
+     * @return resource headers
+     */
+    Stream<ResourceHeaders> streamResourceHeaders();
 
     /**
      * Sets the timestamp that's stamped on the OCFL version. If this value is not set, the current system time
@@ -103,6 +149,13 @@ public interface OcflObjectSession {
      * @param message the OCFL version message
      */
     void versionMessage(final String message);
+
+    /**
+     * Sets the commit behavior -- create a new version or update the mutable HEAD.
+     *
+     * @param commitType the commit behavior
+     */
+    void commitType(final CommitType commitType);
 
     /**
      * Commits the session, persisting all changes to a new OCFL version.

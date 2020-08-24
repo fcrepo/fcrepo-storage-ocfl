@@ -20,6 +20,7 @@ package org.fcrepo.storage.ocfl;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Objects;
 
@@ -51,6 +52,10 @@ public class ResourceHeaders {
     private boolean objectRoot;
     private boolean deleted;
     private String contentPath;
+
+    public ResourceHeaders() {
+        digests = new ArrayList<>();
+    }
 
     /**
      * @return the fedora id
@@ -161,7 +166,11 @@ public class ResourceHeaders {
      * @param digests the digests to set
      */
     public void setDigests(final Collection<URI> digests) {
-        this.digests = digests;
+        if (digests == null) {
+            this.digests = new ArrayList<>();
+        } else {
+            this.digests = digests;
+        }
     }
 
     /**

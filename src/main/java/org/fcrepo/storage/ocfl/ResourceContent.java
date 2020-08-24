@@ -18,6 +18,7 @@
 
 package org.fcrepo.storage.ocfl;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Objects;
 import java.util.Optional;
@@ -70,10 +71,10 @@ public class ResourceContent implements AutoCloseable {
     /**
      * Closes the underlying resource content stream.
      *
-     * @throws Exception if the stream is not closed cleanly
+     * @throws IOException if the stream is not closed cleanly
      */
     @Override
-    public void close() throws Exception {
+    public void close() throws IOException {
         if (contentStream.isPresent()) {
             contentStream.get().close();
         }

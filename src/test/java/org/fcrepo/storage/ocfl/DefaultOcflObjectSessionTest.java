@@ -21,7 +21,8 @@ package org.fcrepo.storage.ocfl;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import edu.wisc.library.ocfl.api.OcflRepository;
+import edu.wisc.library.ocfl.api.MutableOcflRepository;
+import edu.wisc.library.ocfl.api.exception.FixityCheckException;
 import edu.wisc.library.ocfl.api.model.ObjectVersionId;
 import edu.wisc.library.ocfl.core.OcflRepositoryBuilder;
 import edu.wisc.library.ocfl.core.extension.storage.layout.config.HashedTruncatedNTupleConfig;
@@ -37,13 +38,21 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -61,7 +70,7 @@ public class DefaultOcflObjectSessionTest {
     private Path ocflRoot;
     private Path sessionStaging;
 
-    private OcflRepository ocflRepo;
+    private MutableOcflRepository ocflRepo;
     private OcflObjectSessionFactory sessionFactory;
 
     private static final String ROOT = "info:fedora";
@@ -85,7 +94,7 @@ public class DefaultOcflObjectSessionTest {
                 .logicalPathMapper(logicalPathMapper)
                 .storage(FileSystemOcflStorage.builder().repositoryRoot(ocflRoot).build())
                 .workDir(ocflTemp)
-                .build();
+                .buildMutable();
 
         final var objectMapper = new ObjectMapper()
                 .configure(WRITE_DATES_AS_TIMESTAMPS, false)
@@ -93,7 +102,7 @@ public class DefaultOcflObjectSessionTest {
                 .setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
         sessionFactory = new DefaultOcflObjectSessionFactory(ocflRepo, sessionStaging, objectMapper,
-                DEFAULT_MESSAGE, DEFAULT_USER, DEFAULT_ADDRESS);
+                CommitType.NEW_VERSION, DEFAULT_MESSAGE, DEFAULT_USER, DEFAULT_ADDRESS);
     }
 
     @Test
@@ -572,7 +581,7 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void writeFileWithNullContent() {
         final var resourceId = "info:fedora/foo";
-        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        final var session = sessionFactory.newSession(resourceId);
 
         final var content = atomicBinary(resourceId, ROOT, null);
 
@@ -586,6 +595,394 @@ public class DefaultOcflObjectSessionTest {
         final var committedContent = session.readContent(resourceId);
         assertResourceContent(null, content, committedContent);
         assertNull(content.getHeaders().getContentPath());
+    }
+
+    @Test
+    public void listAgVersions() {
+        final var binary2Id = DEFAULT_AG_ID + "/baz";
+
+        final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        write(session1, ag(DEFAULT_AG_ID, ROOT, "ag"));
+        write(session1, binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "binary"));
+        session1.commit();
+
+        final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        write(session2, binary(binary2Id, DEFAULT_AG_ID, "binary2"));
+        session2.commit();
+
+        final var session3 = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        write(session3, binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "updated"));
+        session3.commit();
+
+        assertThat(session3.listVersions(DEFAULT_AG_ID).stream()
+                .map(OcflVersionInfo::getVersionNumber)
+                .collect(Collectors.toList()), contains("v1"));
+
+        assertThat(session3.listVersions(DEFAULT_AG_BINARY_ID).stream()
+                .map(OcflVersionInfo::getVersionNumber)
+                .collect(Collectors.toList()), contains("v1", "v3"));
+
+        assertThat(session3.listVersions(binary2Id).stream()
+                .map(OcflVersionInfo::getVersionNumber)
+                .collect(Collectors.toList()), contains("v2"));
+    }
+
+    @Test(expected = NotFoundException.class)
+    public void throwExceptionWhenListingVersionsOnObjectThatDoesNotExist() {
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        session.listVersions(DEFAULT_AG_ID);
+    }
+
+    @Test(expected = NotFoundException.class)
+    public void throwExceptionWhenListingVersionsOnResourceThatDoesNotExist() {
+        close(defaultAg());
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        session.listVersions(DEFAULT_AG_BINARY_ID);
+    }
+
+    @Test
+    public void returnEmptyVersionsWhenResourceIsStagedButNotInOcfl() {
+        close(defaultAg());
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        write(session, binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "test"));
+
+        assertEquals(0, session.listVersions(DEFAULT_AG_BINARY_ID).size());
+    }
+
+    @Test
+    public void returnEmptyVersionsWhenResourceOnlyExistInMutableHead() {
+        close(defaultAg());
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        session.commitType(CommitType.UNVERSIONED);
+
+        write(session, binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "test"));
+        session.commit();
+
+        assertEquals(0, session.listVersions(DEFAULT_AG_BINARY_ID).size());
+        assertEquals(1, session.listVersions(DEFAULT_AG_ID).size());
+    }
+
+    @Test
+    public void readPreviousVersion() {
+        final var resourceId = "info:fedora/foo";
+
+        final var first = atomicBinary(resourceId, ROOT, "first");
+        final var second = atomicBinary(resourceId, ROOT, "second");
+        final var third = atomicBinary(resourceId, ROOT, "third");
+
+        final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session1, first);
+        session1.commit();
+
+        final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session2, second);
+        session2.commit();
+
+        final var session3 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session3, third);
+        session3.commit();
+
+        assertResourceContent("first", first, session3.readContent(resourceId, "v1"));
+        assertResourceContent("second", second, session3.readContent(resourceId, "v2"));
+        assertResourceContent("third", third, session3.readContent(resourceId, "v3"));
+
+        try {
+            session3.readContent(resourceId, "v4");
+            fail("Expected an exception because the version should not exist");
+        } catch (NotFoundException e) {
+            // expected exception
+        }
+    }
+
+    @Test(expected = FixityCheckException.class)
+    public void failWhenProvidedDigestDoesNotMatchComputed() throws URISyntaxException {
+        final var resourceId = "info:fedora/foo";
+        final var content = atomicBinary(resourceId, ROOT, "bar");
+        content.getHeaders().setDigests(List.of(
+                new URI("urn:sha-512:dc6b68d13b8cf959644b935f1192b02c71aa7a5cf653bd43b4480fa89eec8d4d3f16a" +
+                        "2278ec8c3b40ab1fdb233b3173a78fd83590d6f739e0c9e8ff56c282557")));
+
+        final var session = sessionFactory.newSession(resourceId);
+
+        write(session, content);
+        session.commit();
+    }
+
+    @Test
+    public void addOcflDigestWhenNotProvided() throws URISyntaxException {
+        final var resourceId = "info:fedora/foo";
+        final var content = atomicBinary(resourceId, ROOT, "bar");
+
+        final var sha512Digest = "d82c4eb5261cb9c8aa9855edd67d1bd10482f41529858d925094d173fa662aa" +
+                "91ff39bc5b188615273484021dfb16fd8284cf684ccf0fc795be3aa2fc1e6c181";
+        final var sha256Digest = "fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9";
+
+        final var digests = new ArrayList<URI>();
+        digests.add(new URI("urn:sha-256:" + sha256Digest));
+
+        content.getHeaders().setDigests(digests);
+
+        final var session = sessionFactory.newSession(resourceId);
+
+        write(session, content);
+        session.commit();
+
+        final var headers = session.readHeaders(resourceId);
+
+        assertThat(headers.getDigests(), containsInAnyOrder(
+                new URI("urn:sha-256:" + sha256Digest),
+                new URI("urn:sha-512:" + sha512Digest)));
+    }
+
+    @Test
+    public void commitToMutableHeadWhenNewObject() {
+        final var resourceId = "info:fedora/foo";
+
+        final var content1 = atomicBinary(resourceId, ROOT, "first");
+        final var session1 = sessionFactory.newSession(resourceId);
+        session1.commitType(CommitType.UNVERSIONED);
+
+        write(session1, content1);
+        session1.commit();
+
+        assertResourceContent("first", content1, session1.readContent(resourceId));
+
+        final var content2 = atomicBinary(resourceId, ROOT, "second");
+        final var session2 = sessionFactory.newSession(resourceId);
+        session2.commitType(CommitType.UNVERSIONED);
+
+        write(session2, content2);
+        session2.commit();
+
+        assertResourceContent("second", content2, session2.readContent(resourceId));
+
+        assertEquals(0, session2.listVersions(resourceId).size());
+    }
+
+    @Test
+    public void commitToMutableHeadWhenHasExistingVersion() {
+        final var resourceId = "info:fedora/foo";
+
+        final var content1 = atomicBinary(resourceId, ROOT, "first");
+        final var session1 = sessionFactory.newSession(resourceId);
+
+        write(session1, content1);
+        session1.commit();
+
+        assertResourceContent("first", content1, session1.readContent(resourceId));
+
+        final var content2 = atomicBinary(resourceId, ROOT, "second");
+        final var session2 = sessionFactory.newSession(resourceId);
+        session2.commitType(CommitType.UNVERSIONED);
+
+        write(session2, content2);
+        session2.commit();
+
+        assertResourceContent("second", content2, session2.readContent(resourceId));
+
+        assertEquals(1, session2.listVersions(resourceId).size());
+
+        assertResourceContent("first", content1, session2.readContent(resourceId, "v1"));
+    }
+
+    @Test
+    public void commitNewVersionWhenHasStagedChanges() {
+        final var resourceId = "info:fedora/foo";
+
+        final var content1 = atomicBinary(resourceId, ROOT, "first");
+        final var session1 = sessionFactory.newSession(resourceId);
+        session1.commitType(CommitType.UNVERSIONED);
+
+        write(session1, content1);
+        session1.commit();
+
+        assertResourceContent("first", content1, session1.readContent(resourceId));
+
+        final var content2 = atomicBinary(resourceId, ROOT, "second");
+        final var session2 = sessionFactory.newSession(resourceId);
+
+        write(session2, content2);
+        session2.commit();
+
+        assertResourceContent("second", content2, session2.readContent(resourceId));
+
+        assertEquals(1, session2.listVersions(resourceId).size());
+
+        assertResourceContent("second", content2, session2.readContent(resourceId, "v2"));
+    }
+
+    @Test
+    public void listResourcesWhenOnlyOneWithNothingStaged() {
+        final var ag = defaultAg();
+        close(ag);
+
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
+
+        assertThat(resources, containsInAnyOrder(ag.getHeaders()));
+    }
+
+    @Test
+    public void listResourcesWhenMultipleWithNothingStaged() {
+        final var ag = defaultAg();
+        final var binary = defaultAgBinary();
+        close(ag);
+        close(binary);
+
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
+
+        assertThat(resources, containsInAnyOrder(ag.getHeaders(), binary.getHeaders()));
+    }
+
+    @Test
+    public void listResourcesWhenMultipleWithStagedChanges() {
+        final var ag = defaultAg();
+        final var binary = defaultAgBinary();
+        close(ag);
+        close(binary);
+
+        final var binaryUpdate = binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "updated!");
+
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session, binaryUpdate);
+
+        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
+
+        assertThat(resources, containsInAnyOrder(ag.getHeaders(), binaryUpdate.getHeaders()));
+    }
+
+    @Test
+    public void listResourcesWhenMultipleWithStagedDeletes() {
+        final var ag = defaultAg();
+        final var binary = defaultAgBinary();
+        close(ag);
+        close(binary);
+
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+
+        session.deleteContentFile(binary.getHeaders());
+
+        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
+        assertThat(resources, containsInAnyOrder(ag.getHeaders(), binary.getHeaders()));
+
+        session.deleteResource(DEFAULT_AG_BINARY_ID);
+
+        final var resources2 = session.streamResourceHeaders().collect(Collectors.toList());
+        assertThat(resources2, containsInAnyOrder(ag.getHeaders()));
+    }
+
+    @Test
+    public void listResourceWhenNotCreated() {
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
+        assertEquals(0, resources.size());
+    }
+
+    @Test
+    public void listResourceWhenPendingDelete() {
+        close(defaultAg());
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        session.deleteResource(DEFAULT_AG_ID);
+        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
+        assertEquals(0, resources.size());
+    }
+
+    @Test
+    public void containsResourceWhenExistsInOcfl() {
+        close(defaultAg());
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        assertTrue(session.containsResource(DEFAULT_AG_ID));
+    }
+
+    @Test
+    public void containsResourceWhenExistsInStaging() {
+        final var resourceId = "info:fedora/foo";
+
+        final var content = atomicBinary(resourceId, ROOT, "first");
+        final var session = sessionFactory.newSession(resourceId);
+
+        write(session, content);
+
+        assertTrue(session.containsResource(resourceId));
+    }
+
+    @Test
+    public void containsResourceWhenContentDeleted() {
+        final var resourceId = "info:fedora/foo";
+
+        final var content = atomicBinary(resourceId, ROOT, "first");
+        final var session = sessionFactory.newSession(resourceId);
+
+        write(session, content);
+        session.commit();
+
+        final var session2 = sessionFactory.newSession(resourceId);
+
+        session2.deleteContentFile(content.getHeaders());
+
+        assertTrue(session2.containsResource(resourceId));
+    }
+
+    @Test
+    public void notContainsResourceWhenPendingDelete() {
+        final var resourceId = "info:fedora/foo";
+
+        final var content = atomicBinary(resourceId, ROOT, "first");
+        final var session = sessionFactory.newSession(resourceId);
+
+        write(session, content);
+        session.commit();
+
+        final var session2 = sessionFactory.newSession(resourceId);
+
+        session2.deleteResource(resourceId);
+
+        assertFalse(session2.containsResource(resourceId));
+    }
+
+    @Test
+    public void notContainsResourceWhenObjectNotExists() {
+        final var resourceId = "info:fedora/foo";
+        final var session = sessionFactory.newSession(resourceId);
+        assertFalse(session.containsResource(resourceId));
+    }
+
+    @Test
+    public void notContainsResourceWhenNotExists() {
+        close(defaultAg());
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        assertFalse(session.containsResource(DEFAULT_AG_BINARY_ID));
+    }
+
+    @Test
+    public void readPreviousVersionWhenHasChangesPending() {
+        final var resourceId = "info:fedora/foo";
+
+        final var first = atomicBinary(resourceId, ROOT, "first");
+        final var second = atomicBinary(resourceId, ROOT, "second");
+        final var third = atomicBinary(resourceId, ROOT, "third");
+
+        final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session1, first);
+        session1.commit();
+
+        final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session2, second);
+        session2.commit();
+
+        final var session3 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session3, third);
+
+        assertResourceContent("first", first, session3.readContent(resourceId, "v1"));
+        assertResourceContent("second", second, session3.readContent(resourceId, "v2"));
+        assertResourceContent("third", third, session3.readContent(resourceId));
     }
 
     private void assertResourceContent(final String content,

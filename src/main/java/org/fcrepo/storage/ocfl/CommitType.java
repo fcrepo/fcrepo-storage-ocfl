@@ -18,34 +18,14 @@
 
 package org.fcrepo.storage.ocfl;
 
-import java.util.Optional;
-
 /**
- * Factory for creating OcflObjectSessions.
+ * Options for defining the behavior when performing a commit to the persistent storage layer.
  *
- * @author pwinckles
+ * @author bbpennel
  */
-public interface OcflObjectSessionFactory {
-
-    /**
-     * Creates a new OCFL object session for the specified OCFL object.
-     *
-     * @param ocflObjectId the OCFL object id to open a session for
-     * @return new session
-     */
-    OcflObjectSession newSession(final String ocflObjectId);
-
-    /**
-     * Returns an existing session, if one exists.
-     *
-     * @param sessionId the id of an OcflObjectSession
-     * @return an existing session
-     */
-    Optional<OcflObjectSession> existingSession(final String sessionId);
-
-    /**
-     * Closes the underlying OCFL repository, and aborts all active sessions.
-     */
-    void close();
-
+public enum CommitType {
+    /* Commit unversioned content */
+    UNVERSIONED,
+    /* Commit a new version */
+    NEW_VERSION
 }

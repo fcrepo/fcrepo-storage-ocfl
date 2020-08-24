@@ -19,10 +19,16 @@
 package org.fcrepo.storage.ocfl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import edu.wisc.library.ocfl.api.OcflRepository;
+import com.fasterxml.jackson.databind.ObjectReader;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import edu.wisc.library.ocfl.api.MutableOcflRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,24 +40,34 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory {
 
-    private final OcflRepository ocflRepo;
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultOcflObjectSessionFactory.class);
+
+    private final MutableOcflRepository ocflRepo;
     private final Path stagingRoot;
-    private final ObjectMapper objectMapper;
+    private final ObjectReader headerReader;
+    private final ObjectWriter headerWriter;
+    private CommitType defaultCommitType;
     private final String defaultVersionMessage;
     private final String defaultVersionUserName;
     private final String defaultVersionUserAddress;
 
     private final Map<String, OcflObjectSession> sessions;
 
-    public DefaultOcflObjectSessionFactory(final OcflRepository ocflRepo,
+    private boolean closed = false;
+
+    public DefaultOcflObjectSessionFactory(final MutableOcflRepository ocflRepo,
                                            final Path stagingRoot,
                                            final ObjectMapper objectMapper,
+                                           final CommitType defaultCommitType,
                                            final String defaultVersionMessage,
                                            final String defaultVersionUserName,
                                            final String defaultVersionUserAddress) {
-        this.ocflRepo = ocflRepo;
-        this.stagingRoot = stagingRoot;
-        this.objectMapper = objectMapper;
+        this.ocflRepo = Objects.requireNonNull(ocflRepo, "ocflRepo cannot be null");
+        this.stagingRoot = Objects.requireNonNull(stagingRoot, "stagingRoot cannot be null");
+        this.headerReader = Objects.requireNonNull(objectMapper, "objectMapper cannot be null")
+                .readerFor(ResourceHeaders.class);
+        this.headerWriter = objectMapper.writerFor(ResourceHeaders.class);
+        this.defaultCommitType = Objects.requireNonNull(defaultCommitType, "defaultCommitType cannot be null");
         this.defaultVersionMessage = defaultVersionMessage;
         this.defaultVersionUserName = defaultVersionUserName;
         this.defaultVersionUserAddress = defaultVersionUserAddress;
@@ -60,13 +76,17 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
 
     @Override
     public OcflObjectSession newSession(final String ocflObjectId) {
+        enforceOpen();
+
         final var sessionId = UUID.randomUUID().toString();
         final var session = new DefaultOcflObjectSession(
                 sessionId,
                 ocflRepo,
                 ocflObjectId,
                 stagingRoot.resolve(sessionId),
-                objectMapper,
+                headerReader,
+                headerWriter,
+                defaultCommitType,
                 () -> sessions.remove(sessionId)
         );
 
@@ -79,7 +99,39 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
 
     @Override
     public Optional<OcflObjectSession> existingSession(final String sessionId) {
+        enforceOpen();
         return Optional.ofNullable(sessions.get(sessionId));
+    }
+
+    @Override
+    public void close() {
+        if (!closed) {
+            closed = true;
+            final var sessions = new ArrayList<>(this.sessions.values());
+            sessions.forEach(session -> {
+                try {
+                    session.abort();
+                } catch (RuntimeException e) {
+                    LOG.warn("Failed to close session {} cleanly.", session.sessionId(), e);
+                }
+            });
+            ocflRepo.close();
+        }
+    }
+
+    private void enforceOpen() {
+        if (closed) {
+            throw new IllegalStateException("The session factory is closed!");
+        }
+    }
+
+    /**
+     * Allows the default CommitType to be changed at run time -- useful for testing.
+     *
+     * @param defaultCommitType commit type
+     */
+    public void setDefaultCommitType(final CommitType defaultCommitType) {
+        this.defaultCommitType = Objects.requireNonNull(defaultCommitType, "defaultCommitType cannot be null");
     }
 
 }
