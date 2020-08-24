@@ -58,7 +58,6 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -623,7 +622,7 @@ public class DefaultOcflObjectSessionTest {
 
         assertThat(session3.listVersions(DEFAULT_AG_ID).stream()
                 .map(OcflVersionInfo::getVersionNumber)
-                .collect(Collectors.toList()), contains("v1"));
+                .collect(Collectors.toList()), contains("v1", "v2", "v3"));
 
         assertThat(session3.listVersions(DEFAULT_AG_BINARY_ID).stream()
                 .map(OcflVersionInfo::getVersionNumber)
@@ -841,8 +840,10 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
 
         final var resources = session.streamResourceHeaders().collect(Collectors.toList());
+        resources.forEach(this::nullLastModified);
 
-        assertThat(resources, containsInAnyOrder(ag.getHeaders(), binary.getHeaders()));
+        assertThat(resources, containsInAnyOrder(nullLastModified(ag.getHeaders()),
+                nullLastModified(binary.getHeaders())));
     }
 
     @Test
@@ -858,8 +859,10 @@ public class DefaultOcflObjectSessionTest {
         write(session, binaryUpdate);
 
         final var resources = session.streamResourceHeaders().collect(Collectors.toList());
+        resources.forEach(this::nullLastModified);
 
-        assertThat(resources, containsInAnyOrder(ag.getHeaders(), binaryUpdate.getHeaders()));
+        assertThat(resources, containsInAnyOrder(nullLastModified(ag.getHeaders()),
+                nullLastModified(binaryUpdate.getHeaders())));
     }
 
     @Test
@@ -874,12 +877,15 @@ public class DefaultOcflObjectSessionTest {
         session.deleteContentFile(binary.getHeaders());
 
         final var resources = session.streamResourceHeaders().collect(Collectors.toList());
-        assertThat(resources, containsInAnyOrder(ag.getHeaders(), binary.getHeaders()));
+        resources.forEach(this::nullLastModified);
+        assertThat(resources, containsInAnyOrder(nullLastModified(ag.getHeaders()),
+                nullLastModified(binary.getHeaders())));
 
         session.deleteResource(DEFAULT_AG_BINARY_ID);
 
         final var resources2 = session.streamResourceHeaders().collect(Collectors.toList());
-        assertThat(resources2, containsInAnyOrder(ag.getHeaders()));
+        resources2.forEach(this::nullLastModified);
+        assertThat(resources2, containsInAnyOrder(nullLastModified(ag.getHeaders())));
     }
 
     @Test
@@ -990,47 +996,87 @@ public class DefaultOcflObjectSessionTest {
     }
 
     @Test
-    public void touchLastModifiedDateOnExistingResource() {
+    public void touchAgWhenAgPartUpdated() {
         close(defaultAg());
 
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        assertEquals(1, session.listVersions(DEFAULT_AG_ID).size());
 
-        final var original = session.readHeaders(DEFAULT_AG_ID).getLastModifiedDate();
+        close(defaultAgBinary());
 
-        session.touchResource(DEFAULT_AG_ID);
-        session.commit();
-
-        final var touched = session.readHeaders(DEFAULT_AG_ID).getLastModifiedDate();
-
-        assertNotEquals(original, touched);
         assertEquals(2, session.listVersions(DEFAULT_AG_ID).size());
+        assertEquals(1, session.listVersions(DEFAULT_AG_BINARY_ID).size());
     }
 
     @Test
-    public void touchLastModifiedDateOnStagedResource() {
+    public void doNotTouchAgWhenAclUpdate() {
+        close(defaultAg());
+
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        assertEquals(1, session.listVersions(DEFAULT_AG_ID).size());
+
+        final var resourceId = DEFAULT_AG_ID + "/fcr:acl";
+        final var content = acl(resourceId, DEFAULT_AG_ID, "blah");
+
+        write(session, content);
+        session.commit();
+
+        assertEquals(1, session.listVersions(DEFAULT_AG_ID).size());
+        assertEquals(1, session.listVersions(resourceId).size());
+    }
+
+    @Test
+    public void touchBinaryWhenDescUpdated() {
         final var resourceId = "info:fedora/foo";
-        final var content = atomicBinary(resourceId, ROOT, "first");
+        final var content = atomicBinary(resourceId, ROOT, "foo");
+
+        final var descId = "info:fedora/foo/fcr:metadata";
+        final var descContent = desc(descId, resourceId, "desc");
 
         final var session = sessionFactory.newSession(resourceId);
 
         write(session, content);
-
-        final var original = session.readHeaders(resourceId).getLastModifiedDate();
-
-        session.touchResource(resourceId);
+        write(session, descContent);
         session.commit();
 
-        final var touched = session.readHeaders(resourceId).getLastModifiedDate();
-
-        assertNotEquals(original, touched);
         assertEquals(1, session.listVersions(resourceId).size());
+        assertEquals(1, session.listVersions(descId).size());
+
+        final var session2 = sessionFactory.newSession(resourceId);
+        final var descContent2 = desc(descId, resourceId, "desc2");
+
+        write(session2, descContent2);
+        session2.commit();
+
+        assertEquals(2, session.listVersions(resourceId).size());
+        assertEquals(2, session.listVersions(descId).size());
     }
 
-    @Test(expected = NotFoundException.class)
-    public void failTouchWhenResourceDoesNotExist() {
-        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+    @Test
+    public void touchBinaryDescWhenBinaryUpdated() {
+        final var resourceId = "info:fedora/foo";
+        final var content = atomicBinary(resourceId, ROOT, "foo");
 
-        session.touchResource(DEFAULT_AG_ID);
+        final var descId = "info:fedora/foo/fcr:metadata";
+        final var descContent = desc(descId, resourceId, "desc");
+
+        final var session = sessionFactory.newSession(resourceId);
+
+        write(session, content);
+        write(session, descContent);
+        session.commit();
+
+        assertEquals(1, session.listVersions(resourceId).size());
+        assertEquals(1, session.listVersions(descId).size());
+
+        final var session2 = sessionFactory.newSession(resourceId);
+        final var content2 = atomicBinary(resourceId, ROOT, "bar");
+
+        write(session2, content2);
+        session2.commit();
+
+        assertEquals(2, session.listVersions(resourceId).size());
+        assertEquals(2, session.listVersions(descId).size());
     }
 
     @Test
@@ -1073,7 +1119,7 @@ public class DefaultOcflObjectSessionTest {
         } else {
             assertEquals(content, toString(actual.getContentStream()));
         }
-        assertEquals(expected.getHeaders(), actual.getHeaders());
+        assertEquals(nullLastModified(expected.getHeaders()), nullLastModified(actual.getHeaders()));
     }
 
     private void expectResourceNotFound(final String resourceId, final OcflObjectSession session) {
@@ -1216,6 +1262,15 @@ public class DefaultOcflObjectSessionTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /**
+     * Null the last modified date because its exact value is often not know,
+     * which makes it difficult to write assertions
+     */
+    private ResourceHeaders nullLastModified(final ResourceHeaders headers) {
+        headers.setLastModifiedDate(null);
+        return headers;
     }
 
 }

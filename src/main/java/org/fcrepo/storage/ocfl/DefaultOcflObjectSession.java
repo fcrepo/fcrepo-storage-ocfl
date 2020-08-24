@@ -98,6 +98,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     private CommitType commitType;
     private String rootResourceId;
+    private boolean isArchivalGroup;
     private boolean closed = false;
     private boolean deleteObject = false;
 
@@ -123,7 +124,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         this.digests = new HashMap<>();
         this.ocflOptions = new OcflOption[] {OcflOption.MOVE_SOURCE, OcflOption.OVERWRITE};
 
-        this.rootResourceId = loadRootResourceId();
+        loadRootResourceId();
         this.digestAlgorithm = identifyObjectDigestAlgorithm();
     }
 
@@ -182,24 +183,12 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
             }
 
             writeHeaders(headers, headerDst);
+            touchRelatedResources(headers);
         } catch (RuntimeException e) {
             safeDelete(contentDst);
             safeDelete(headerDst);
             throw e;
         }
-    }
-
-    @Override
-    public void touchResource(final String resourceId) {
-        enforceOpen();
-
-        final var headers = readHeaders(resourceId);
-        headers.setLastModifiedDate(Instant.now());
-
-        final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));
-        final var headerDst = createStagingPath(headerPath);
-
-        writeHeaders(headers, headerDst);
     }
 
     @Override
@@ -425,11 +414,11 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
             final var parentHeaders = readHeaders(headers.getParent());
             paths = PersistencePaths.aclResource(!InteractionModel.NON_RDF.getUri()
                             .equals(parentHeaders.getInteractionModel()),
-                    resolveRootResourceId(resourceId), resourceId);
+                    resolveRootResourceId(headers), resourceId);
         } else if (InteractionModel.NON_RDF.getUri().equals(headers.getInteractionModel())) {
-            paths = PersistencePaths.nonRdfResource(resolveRootResourceId(resourceId), resourceId);
+            paths = PersistencePaths.nonRdfResource(resolveRootResourceId(headers), resourceId);
         } else if (headers.getInteractionModel() != null) {
-            paths = PersistencePaths.rdfResource(resolveRootResourceId(resourceId), resourceId);
+            paths = PersistencePaths.rdfResource(resolveRootResourceId(headers), resourceId);
         } else {
             throw new IllegalArgumentException(
                     String.format("Interaction model for resource %s must be populated.", resourceId));
@@ -518,6 +507,39 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         }
     }
 
+    private void touchRelatedResources(final ResourceHeaders headers) {
+        // Touch the AG for non-ACL AG part updates
+        if (isArchivalGroup
+                && !Objects.equals(rootResourceId(), headers.getId())
+                && !InteractionModel.ACL.getUri().equals(headers.getInteractionModel())) {
+            LOG.debug("Touching AG {} after updating {}", rootResourceId(), headers.getId());
+            touchResource(rootResourceId());
+        }
+
+        if (InteractionModel.NON_RDF_DESCRIPTION.getUri().equals(headers.getInteractionModel())) {
+            LOG.debug("Touching binary {} after updating {}", headers.getParent(), headers.getId());
+            touchResource(headers.getParent());
+        } else if (InteractionModel.NON_RDF.getUri().equals(headers.getInteractionModel())) {
+            final var descriptionId = headers.getId() + "/" + PersistencePaths.FCR_METADATA;
+            LOG.debug("Touching binary description {} after updating {}", descriptionId, headers.getId());
+            try {
+                touchResource(descriptionId);
+            } catch (NotFoundException e) {
+                // Ignore this exception because it just means that the binary description hasn't been created yet
+            }
+        }
+    }
+
+    private void touchResource(final String resourceId) {
+        final var headers = readHeaders(resourceId);
+        headers.setLastModifiedDate(Instant.now());
+
+        final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));
+        final var headerDst = createStagingPath(headerPath);
+
+        writeHeaders(headers, headerDst);
+    }
+
     private Consumer<OcflObjectUpdater> createObjectUpdater() {
         return updater -> {
             if (Files.exists(objectStaging)) {
@@ -588,24 +610,21 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
      * Attempts to load the root resource id of the OCFL object. If the OCFL object does not exist, then null is
      * returned and the root resource id is populated on the first session write operation. If the object does
      * exist but it does not contain a root resource, then an exception is thrown.
-     *
-     * @return the root resource id, or null
      */
-    private String loadRootResourceId() {
+    private void loadRootResourceId() {
         if (ocflRepo.containsObject(ocflObjectId)) {
             final var stream = readFromOcfl(encode(PersistencePaths.ROOT_HEADER_PATH), null);
 
             if (stream.isPresent()) {
                 final var headers = readHeaders(stream.get());
-                return headers.getId();
+                rootResourceId = headers.getId();
+                isArchivalGroup = headers.isArchivalGroup();
             } else {
                 throw new IllegalStateException(
                         String.format("OCFL object %s exists but it does not contain a root Fedora resource",
                                 ocflObjectId));
             }
         }
-
-        return null;
     }
 
     /**
@@ -613,12 +632,13 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
      * root resource id has not already been set. Otherwise, the existing root resource id is returned. This
      * method SHOULD NOT be called from any other operation other than write.
      *
-     * @param resourceId the write resource id
+     * @param headers the resource headers
      * @return the resolved root resource id
      */
-    private String resolveRootResourceId(final String resourceId) {
+    private String resolveRootResourceId(final ResourceHeaders headers) {
         if (rootResourceId == null) {
-            rootResourceId = resourceId;
+            rootResourceId = headers.getId();
+            isArchivalGroup = headers.isArchivalGroup();
         }
         return rootResourceId;
     }
