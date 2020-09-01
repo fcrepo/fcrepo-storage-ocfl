@@ -31,6 +31,8 @@ import edu.wisc.library.ocfl.api.model.VersionInfo;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.SystemUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -72,7 +74,9 @@ import java.util.stream.StreamSupport;
  */
 public class DefaultOcflObjectSession implements OcflObjectSession {
 
-    private final int SPLITERATOR_OPTS = Spliterator.NONNULL |
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultOcflObjectSession.class);
+
+    private static final int SPLITERATOR_OPTS = Spliterator.NONNULL |
             Spliterator.DISTINCT |
             Spliterator.SIZED |
             Spliterator.SUBSIZED |
@@ -94,6 +98,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     private CommitType commitType;
     private String rootResourceId;
+    private boolean isArchivalGroup;
     private boolean closed = false;
     private boolean deleteObject = false;
 
@@ -119,7 +124,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         this.digests = new HashMap<>();
         this.ocflOptions = new OcflOption[] {OcflOption.MOVE_SOURCE, OcflOption.OVERWRITE};
 
-        this.rootResourceId = loadRootResourceId();
+        loadRootResourceId();
         this.digestAlgorithm = identifyObjectDigestAlgorithm();
     }
 
@@ -142,30 +147,50 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         final var contentPath = encode(paths.getContentFilePath());
         final var headerPath = encode(paths.getHeaderFilePath());
 
+        Path contentDst = null;
+        final var headerDst = createStagingPath(headerPath);
+
         deletePaths.remove(contentPath);
         deletePaths.remove(headerPath);
 
-        if (content != null) {
-            final var contentDst = createStagingPath(contentPath);
-            var digest = getOcflDigest(headers.getDigests());
+        try {
+            if (content != null) {
+                contentDst = createStagingPath(contentPath);
+                var digest = getOcflDigest(headers.getDigests());
 
-            if (digest == null) {
-                final var messageDigest = digestAlgorithm.getMessageDigest();
-                write(new DigestInputStream(content, messageDigest), contentDst);
-                digest = Hex.encodeHexString(messageDigest.digest());
-                addDigestHeader(digest, headers);
-            } else {
-                write(content, contentDst);
+                if (digest == null) {
+                    // compute the digest that OCFL uses if it was not provided
+                    final var messageDigest = digestAlgorithm.getMessageDigest();
+                    write(new DigestInputStream(content, messageDigest), contentDst);
+                    digest = Hex.encodeHexString(messageDigest.digest());
+                    addDigestHeader(digest, headers);
+                } else {
+                    write(content, contentDst);
+                }
+
+                digests.put(contentPath, digest);
+
+                final var fileSize = fileSize(contentDst);
+
+                if (headers.getContentSize() != null
+                        && fileSize != headers.getContentSize()) {
+                    throw new InvalidContentException(
+                            String.format("Resource %s's file size does not match expectation." +
+                                    " Expected: %s; Actual: %s",
+                            headers.getId(), headers.getContentSize(), fileSize));
+                }
+
+                headers.setContentPath(contentPath.path);
+                headers.setContentSize(fileSize);
             }
 
-            digests.put(contentPath, digest);
-
-            headers.setContentPath(contentPath.path);
-            headers.setContentSize(fileSize(contentDst));
+            writeHeaders(headers, headerDst);
+            touchRelatedResources(headers);
+        } catch (RuntimeException e) {
+            safeDelete(contentDst);
+            safeDelete(headerDst);
+            throw e;
         }
-
-        final var headerDst = createStagingPath(headerPath);
-        writeHeaders(headers, headerDst);
     }
 
     @Override
@@ -391,11 +416,11 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
             final var parentHeaders = readHeaders(headers.getParent());
             paths = PersistencePaths.aclResource(!InteractionModel.NON_RDF.getUri()
                             .equals(parentHeaders.getInteractionModel()),
-                    resolveRootResourceId(resourceId), resourceId);
+                    resolveRootResourceId(headers), resourceId);
         } else if (InteractionModel.NON_RDF.getUri().equals(headers.getInteractionModel())) {
-            paths = PersistencePaths.nonRdfResource(resolveRootResourceId(resourceId), resourceId);
+            paths = PersistencePaths.nonRdfResource(resolveRootResourceId(headers), resourceId);
         } else if (headers.getInteractionModel() != null) {
-            paths = PersistencePaths.rdfResource(resolveRootResourceId(resourceId), resourceId);
+            paths = PersistencePaths.rdfResource(resolveRootResourceId(headers), resourceId);
         } else {
             throw new IllegalArgumentException(
                     String.format("Interaction model for resource %s must be populated.", resourceId));
@@ -484,6 +509,39 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         }
     }
 
+    private void touchRelatedResources(final ResourceHeaders headers) {
+        // Touch the AG for non-ACL AG part updates
+        if (isArchivalGroup
+                && !Objects.equals(rootResourceId(), headers.getId())
+                && !InteractionModel.ACL.getUri().equals(headers.getInteractionModel())) {
+            LOG.debug("Touching AG {} after updating {}", rootResourceId(), headers.getId());
+            touchResource(rootResourceId());
+        }
+
+        if (InteractionModel.NON_RDF_DESCRIPTION.getUri().equals(headers.getInteractionModel())) {
+            LOG.debug("Touching binary {} after updating {}", headers.getParent(), headers.getId());
+            touchResource(headers.getParent());
+        } else if (InteractionModel.NON_RDF.getUri().equals(headers.getInteractionModel())) {
+            final var descriptionId = headers.getId() + "/" + PersistencePaths.FCR_METADATA;
+            LOG.debug("Touching binary description {} after updating {}", descriptionId, headers.getId());
+            try {
+                touchResource(descriptionId);
+            } catch (NotFoundException e) {
+                // Ignore this exception because it just means that the binary description hasn't been created yet
+            }
+        }
+    }
+
+    private void touchResource(final String resourceId) {
+        final var headers = readHeaders(resourceId);
+        headers.setLastModifiedDate(Instant.now());
+
+        final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));
+        final var headerDst = createStagingPath(headerPath);
+
+        writeHeaders(headers, headerDst);
+    }
+
     private Consumer<OcflObjectUpdater> createObjectUpdater() {
         return updater -> {
             if (Files.exists(objectStaging)) {
@@ -506,12 +564,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     private void deletePathsFromStaging() {
         deletePaths.stream().map(this::stagingPath).forEach(path -> {
-            if (Files.exists(path)) {
-                try {
-                    Files.delete(path);
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
+            try {
+                Files.deleteIfExists(path);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
             }
         });
     }
@@ -556,24 +612,21 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
      * Attempts to load the root resource id of the OCFL object. If the OCFL object does not exist, then null is
      * returned and the root resource id is populated on the first session write operation. If the object does
      * exist but it does not contain a root resource, then an exception is thrown.
-     *
-     * @return the root resource id, or null
      */
-    private String loadRootResourceId() {
+    private void loadRootResourceId() {
         if (ocflRepo.containsObject(ocflObjectId)) {
             final var stream = readFromOcfl(encode(PersistencePaths.ROOT_HEADER_PATH), null);
 
             if (stream.isPresent()) {
                 final var headers = readHeaders(stream.get());
-                return headers.getId();
+                rootResourceId = headers.getId();
+                isArchivalGroup = headers.isArchivalGroup();
             } else {
                 throw new IllegalStateException(
                         String.format("OCFL object %s exists but it does not contain a root Fedora resource",
                                 ocflObjectId));
             }
         }
-
-        return null;
     }
 
     /**
@@ -581,12 +634,13 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
      * root resource id has not already been set. Otherwise, the existing root resource id is returned. This
      * method SHOULD NOT be called from any other operation other than write.
      *
-     * @param resourceId the write resource id
+     * @param headers the resource headers
      * @return the resolved root resource id
      */
-    private String resolveRootResourceId(final String resourceId) {
+    private String resolveRootResourceId(final ResourceHeaders headers) {
         if (rootResourceId == null) {
-            rootResourceId = resourceId;
+            rootResourceId = headers.getId();
+            isArchivalGroup = headers.isArchivalGroup();
         }
         return rootResourceId;
     }
@@ -729,6 +783,16 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     private boolean hasMutableHeadAndShouldCreateNewVersion(final boolean hasMutableHead) {
         return commitType == CommitType.NEW_VERSION && hasMutableHead;
+    }
+
+    private void safeDelete(final Path path) {
+        if (path != null) {
+            try {
+                Files.deleteIfExists(path);
+            } catch (IOException e) {
+                LOG.error("Failed to delete staged file: {}", path);
+            }
+        }
     }
 
     private static class PathPair {
