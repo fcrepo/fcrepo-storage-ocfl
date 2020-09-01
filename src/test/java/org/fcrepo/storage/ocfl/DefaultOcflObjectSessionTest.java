@@ -1098,7 +1098,7 @@ public class DefaultOcflObjectSessionTest {
     }
 
     @Test
-    public void versioningAnMutableHeadAgShouldVersionPartsWithStagedChanges() {
+    public void versioningMutableHeadAgShouldVersionPartsWithStagedChanges() {
         final var agId = "info:fedora/foo";
         final var containerId = "info:fedora/foo/bar";
         final var binaryId = "info:fedora/foo/bar/baz";
