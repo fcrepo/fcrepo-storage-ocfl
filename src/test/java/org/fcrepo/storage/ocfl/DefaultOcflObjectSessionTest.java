@@ -46,6 +46,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -620,17 +621,9 @@ public class DefaultOcflObjectSessionTest {
         write(session3, binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "updated"));
         session3.commit();
 
-        assertThat(session3.listVersions(DEFAULT_AG_ID).stream()
-                .map(OcflVersionInfo::getVersionNumber)
-                .collect(Collectors.toList()), contains("v1", "v2", "v3"));
-
-        assertThat(session3.listVersions(DEFAULT_AG_BINARY_ID).stream()
-                .map(OcflVersionInfo::getVersionNumber)
-                .collect(Collectors.toList()), contains("v1", "v3"));
-
-        assertThat(session3.listVersions(binary2Id).stream()
-                .map(OcflVersionInfo::getVersionNumber)
-                .collect(Collectors.toList()), contains("v2"));
+        assertVersions(session3.listVersions(DEFAULT_AG_ID), "v1", "v2", "v3");
+        assertVersions(session3.listVersions(DEFAULT_AG_BINARY_ID), "v1", "v3");
+        assertVersions(session3.listVersions(binary2Id), "v2");
     }
 
     @Test(expected = NotFoundException.class)
@@ -839,11 +832,9 @@ public class DefaultOcflObjectSessionTest {
 
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
-        resources.forEach(this::nullLastModified);
+        final var resources = listHeaders(session);
 
-        assertThat(resources, containsInAnyOrder(nullLastModified(ag.getHeaders()),
-                nullLastModified(binary.getHeaders())));
+        assertHeaders(resources, ag.getHeaders(), binary.getHeaders());
     }
 
     @Test
@@ -858,11 +849,9 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
         write(session, binaryUpdate);
 
-        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
-        resources.forEach(this::nullLastModified);
+        final var resources = listHeaders(session);
 
-        assertThat(resources, containsInAnyOrder(nullLastModified(ag.getHeaders()),
-                nullLastModified(binaryUpdate.getHeaders())));
+        assertHeaders(resources, ag.getHeaders(), binaryUpdate.getHeaders());
     }
 
     @Test
@@ -876,16 +865,13 @@ public class DefaultOcflObjectSessionTest {
 
         session.deleteContentFile(binary.getHeaders());
 
-        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
-        resources.forEach(this::nullLastModified);
-        assertThat(resources, containsInAnyOrder(nullLastModified(ag.getHeaders()),
-                nullLastModified(binary.getHeaders())));
+        final var resources = listHeaders(session);
+        assertHeaders(resources, ag.getHeaders(), binary.getHeaders());
 
         session.deleteResource(DEFAULT_AG_BINARY_ID);
 
-        final var resources2 = session.streamResourceHeaders().collect(Collectors.toList());
-        resources2.forEach(this::nullLastModified);
-        assertThat(resources2, containsInAnyOrder(nullLastModified(ag.getHeaders())));
+        final var resources2 = listHeaders(session);
+        assertHeaders(resources2, ag.getHeaders());
     }
 
     @Test
@@ -1000,20 +986,20 @@ public class DefaultOcflObjectSessionTest {
         close(defaultAg());
 
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-        assertEquals(1, session.listVersions(DEFAULT_AG_ID).size());
+        assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
 
         close(defaultAgBinary());
 
-        assertEquals(2, session.listVersions(DEFAULT_AG_ID).size());
-        assertEquals(1, session.listVersions(DEFAULT_AG_BINARY_ID).size());
+        assertVersions(session.listVersions(DEFAULT_AG_ID), "v1", "v2");
+        assertVersions(session.listVersions(DEFAULT_AG_BINARY_ID), "v2");
     }
 
     @Test
-    public void doNotTouchAgWhenAclUpdate() {
+    public void doNotTouchAgWhenAclUpdated() {
         close(defaultAg());
 
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-        assertEquals(1, session.listVersions(DEFAULT_AG_ID).size());
+        assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
 
         final var resourceId = DEFAULT_AG_ID + "/fcr:acl";
         final var content = acl(resourceId, DEFAULT_AG_ID, "blah");
@@ -1021,8 +1007,8 @@ public class DefaultOcflObjectSessionTest {
         write(session, content);
         session.commit();
 
-        assertEquals(1, session.listVersions(DEFAULT_AG_ID).size());
-        assertEquals(1, session.listVersions(resourceId).size());
+        assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
+        assertVersions(session.listVersions(resourceId), "v2");
     }
 
     @Test
@@ -1039,8 +1025,8 @@ public class DefaultOcflObjectSessionTest {
         write(session, descContent);
         session.commit();
 
-        assertEquals(1, session.listVersions(resourceId).size());
-        assertEquals(1, session.listVersions(descId).size());
+        assertVersions(session.listVersions(resourceId), "v1");
+        assertVersions(session.listVersions(descId), "v1");
 
         final var session2 = sessionFactory.newSession(resourceId);
         final var descContent2 = desc(descId, resourceId, "desc2");
@@ -1048,8 +1034,8 @@ public class DefaultOcflObjectSessionTest {
         write(session2, descContent2);
         session2.commit();
 
-        assertEquals(2, session.listVersions(resourceId).size());
-        assertEquals(2, session.listVersions(descId).size());
+        assertVersions(session.listVersions(resourceId), "v1", "v2");
+        assertVersions(session.listVersions(descId), "v1", "v2");
     }
 
     @Test
@@ -1066,8 +1052,8 @@ public class DefaultOcflObjectSessionTest {
         write(session, descContent);
         session.commit();
 
-        assertEquals(1, session.listVersions(resourceId).size());
-        assertEquals(1, session.listVersions(descId).size());
+        assertVersions(session.listVersions(resourceId), "v1");
+        assertVersions(session.listVersions(descId), "v1");
 
         final var session2 = sessionFactory.newSession(resourceId);
         final var content2 = atomicBinary(resourceId, ROOT, "bar");
@@ -1075,8 +1061,8 @@ public class DefaultOcflObjectSessionTest {
         write(session2, content2);
         session2.commit();
 
-        assertEquals(2, session.listVersions(resourceId).size());
-        assertEquals(2, session.listVersions(descId).size());
+        assertVersions(session.listVersions(resourceId), "v1", "v2");
+        assertVersions(session.listVersions(descId), "v1", "v2");
     }
 
     @Test
@@ -1090,7 +1076,7 @@ public class DefaultOcflObjectSessionTest {
         try {
             write(session, content);
             fail("should have thrown an exception");
-        } catch (RuntimeException e) {
+        } catch (InvalidContentException e) {
             assertThat(e.getMessage(), containsString("file size does not match"));
         }
     }
@@ -1109,6 +1095,90 @@ public class DefaultOcflObjectSessionTest {
         } catch (RuntimeException e) {
             assertThat(recursiveList(sessionStaging), empty());
         }
+    }
+
+    @Test
+    public void versioningAnMutableHeadAgShouldVersionPartsWithStagedChanges() {
+        final var agId = "info:fedora/foo";
+        final var containerId = "info:fedora/foo/bar";
+        final var binaryId = "info:fedora/foo/bar/baz";
+        final var binary2Id = "info:fedora/foo/bar/boz";
+
+        // Create initial resources -- mutable head
+
+        final var session = sessionFactory.newSession(agId);
+        session.commitType(CommitType.UNVERSIONED);
+
+        final var agContent = ag(agId, ROOT, "foo");
+        final var containerContent = container(containerId, agId, "bar");
+        final var binaryContent = binary(binaryId, containerId, "baz");
+        final var binary2Content = binary(binary2Id, containerId, "boz");
+
+        write(session, agContent);
+        write(session, containerContent);
+        write(session, binaryContent);
+        write(session, binary2Content);
+
+        session.commit();
+
+        assertEquals(0, session.listVersions(agId).size());
+        assertEquals(0, session.listVersions(containerId).size());
+        assertEquals(0, session.listVersions(binaryId).size());
+        assertEquals(0, session.listVersions(binary2Id).size());
+
+        // Commit mutable head
+
+        final var session2 = sessionFactory.newSession(agId);
+        session2.commit();
+
+        assertVersions(session2.listVersions(agId), "v2");
+        assertVersions(session2.listVersions(containerId), "v2");
+        assertVersions(session2.listVersions(binaryId), "v2");
+        assertVersions(session2.listVersions(binary2Id), "v2");
+
+        // Update a subset of resources -- mutable head
+
+        final var session3 = sessionFactory.newSession(agId);
+        session3.commitType(CommitType.UNVERSIONED);
+
+        final var containerContentV2 = container(containerId, agId, "bar - 2");
+        final var binaryContentV2 = binary(binaryId, containerId, "baz - 2");
+
+        write(session3, containerContentV2);
+        write(session3, binaryContentV2);
+
+        session3.commit();
+
+        assertVersions(session3.listVersions(agId), "v2");
+        assertVersions(session3.listVersions(containerId), "v2");
+        assertVersions(session3.listVersions(binaryId), "v2");
+        assertVersions(session3.listVersions(binary2Id), "v2");
+
+        // Update a subset of resources again -- mutable head
+
+        final var session4 = sessionFactory.newSession(agId);
+        session4.commitType(CommitType.UNVERSIONED);
+
+        final var containerContentV3 = container(containerId, agId, "bar - 3");
+
+        write(session4, containerContentV3);
+
+        session4.commit();
+
+        assertVersions(session4.listVersions(agId), "v2");
+        assertVersions(session4.listVersions(containerId), "v2");
+        assertVersions(session4.listVersions(binaryId), "v2");
+        assertVersions(session4.listVersions(binary2Id), "v2");
+
+        // Commit mutable head
+
+        final var session5 = sessionFactory.newSession(agId);
+        session5.commit();
+
+        assertVersions(session5.listVersions(agId), "v2", "v3");
+        assertVersions(session5.listVersions(containerId), "v2", "v3");
+        assertVersions(session5.listVersions(binaryId), "v2", "v3");
+        assertVersions(session5.listVersions(binary2Id), "v2");
     }
 
     private void assertResourceContent(final String content,
@@ -1264,6 +1334,17 @@ public class DefaultOcflObjectSessionTest {
         }
     }
 
+    private void assertHeaders(final List<ResourceHeaders> actual, final ResourceHeaders... expected) {
+        Arrays.stream(expected).forEach(this::nullLastModified);
+        assertThat(actual, containsInAnyOrder(expected));
+    }
+
+    private List<ResourceHeaders> listHeaders(final OcflObjectSession session) {
+        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
+        resources.forEach(this::nullLastModified);
+        return resources;
+    }
+
     /**
      * Null the last modified date because its exact value is often not know,
      * which makes it difficult to write assertions
@@ -1271,6 +1352,13 @@ public class DefaultOcflObjectSessionTest {
     private ResourceHeaders nullLastModified(final ResourceHeaders headers) {
         headers.setLastModifiedDate(null);
         return headers;
+    }
+
+    private void assertVersions(final List<OcflVersionInfo> actual, final String... expected) {
+        final var versionNums = actual.stream()
+                .map(OcflVersionInfo::getVersionNumber)
+                .collect(Collectors.toList());
+        assertThat(versionNums, contains(expected));
     }
 
 }

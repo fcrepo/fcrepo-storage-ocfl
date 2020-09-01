@@ -147,7 +147,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         final var contentPath = encode(paths.getContentFilePath());
         final var headerPath = encode(paths.getHeaderFilePath());
 
-        final var contentDst = createStagingPath(contentPath);
+        Path contentDst = null;
         final var headerDst = createStagingPath(headerPath);
 
         deletePaths.remove(contentPath);
@@ -155,6 +155,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
         try {
             if (content != null) {
+                contentDst = createStagingPath(contentPath);
                 var digest = getOcflDigest(headers.getDigests());
 
                 if (digest == null) {
@@ -173,7 +174,8 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
                 if (headers.getContentSize() != null
                         && fileSize != headers.getContentSize()) {
-                    throw new RuntimeException(String.format("Resource %s's file size does not match expectation." +
+                    throw new InvalidContentException(
+                            String.format("Resource %s's file size does not match expectation." +
                                     " Expected: %s; Actual: %s",
                             headers.getId(), headers.getContentSize(), fileSize));
                 }
@@ -784,10 +786,12 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     private void safeDelete(final Path path) {
-        try {
-            Files.deleteIfExists(path);
-        } catch (IOException e) {
-            LOG.error("Failed to delete staged file: {}", path);
+        if (path != null) {
+            try {
+                Files.deleteIfExists(path);
+            } catch (IOException e) {
+                LOG.error("Failed to delete staged file: {}", path);
+            }
         }
     }
 
