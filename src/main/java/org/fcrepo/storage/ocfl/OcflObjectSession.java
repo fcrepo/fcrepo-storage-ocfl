@@ -173,4 +173,7 @@ public interface OcflObjectSession extends AutoCloseable {
      */
     boolean isOpen();
 
+    @Override
+    void close();
+
 }
