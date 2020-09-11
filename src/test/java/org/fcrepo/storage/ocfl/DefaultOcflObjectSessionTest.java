@@ -49,6 +49,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
@@ -992,6 +993,26 @@ public class DefaultOcflObjectSessionTest {
 
         assertVersions(session.listVersions(DEFAULT_AG_ID), "v1", "v2");
         assertVersions(session.listVersions(DEFAULT_AG_BINARY_ID), "v2");
+    }
+
+    @Test
+    public void touchingShouldUseTheTimestampFromTheLastUpdatedResource() throws InterruptedException {
+        close(defaultAg());
+
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
+
+        final var binary = binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "bar");
+        final var timestamp = binary.getHeaders().getLastModifiedDate();
+
+        TimeUnit.SECONDS.sleep(1);
+
+        final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session2, binary);
+        session2.commit();
+
+        final var agHeaders = session2.readHeaders(DEFAULT_AG_ID);
+        assertEquals(timestamp, agHeaders.getLastModifiedDate());
     }
 
     @Test
