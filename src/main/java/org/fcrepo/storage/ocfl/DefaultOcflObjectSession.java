@@ -515,26 +515,26 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                 && !Objects.equals(rootResourceId(), headers.getId())
                 && !InteractionModel.ACL.getUri().equals(headers.getInteractionModel())) {
             LOG.debug("Touching AG {} after updating {}", rootResourceId(), headers.getId());
-            touchResource(rootResourceId());
+            touchResource(rootResourceId(), headers.getLastModifiedDate());
         }
 
         if (InteractionModel.NON_RDF_DESCRIPTION.getUri().equals(headers.getInteractionModel())) {
             LOG.debug("Touching binary {} after updating {}", headers.getParent(), headers.getId());
-            touchResource(headers.getParent());
+            touchResource(headers.getParent(), headers.getLastModifiedDate());
         } else if (InteractionModel.NON_RDF.getUri().equals(headers.getInteractionModel())) {
             final var descriptionId = headers.getId() + "/" + PersistencePaths.FCR_METADATA;
             LOG.debug("Touching binary description {} after updating {}", descriptionId, headers.getId());
             try {
-                touchResource(descriptionId);
+                touchResource(descriptionId, headers.getLastModifiedDate());
             } catch (NotFoundException e) {
                 // Ignore this exception because it just means that the binary description hasn't been created yet
             }
         }
     }
 
-    private void touchResource(final String resourceId) {
+    private void touchResource(final String resourceId, final Instant timestamp) {
         final var headers = readHeaders(resourceId);
-        headers.setLastModifiedDate(Instant.now());
+        headers.setLastModifiedDate(timestamp);
 
         final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));
         final var headerDst = createStagingPath(headerPath);
