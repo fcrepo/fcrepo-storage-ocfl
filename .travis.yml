@@ -40,6 +40,6 @@ deploy:
     script: .travis/deploy.sh
     skip_cleanup: true
     on:
-      repo: fcrepo4-exts/fcrepo-storage-ocfl
+      repo: fcrepo-exts/fcrepo-storage-ocfl
       branch: main
       condition: $TRAVIS_OS_NAME = linux
