@@ -46,9 +46,10 @@ public interface OcflObjectSession extends AutoCloseable {
      *
      * @param headers the resource's headers
      * @param content the resource's content, may be null if the resource has no content
+     * @return the resource headers that were written to disk, these may differ from the input headers
      * @throws InvalidContentException when the content size in the headers does not match the actual content size
      */
-    void writeResource(final ResourceHeaders headers, final InputStream content);
+    ResourceHeaders writeResource(final ResourceHeaders headers, final InputStream content);
 
     /**
      * Deletes a content file from the session, and updates the associated headers. If the resource was added in
