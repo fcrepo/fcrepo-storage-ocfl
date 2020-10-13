@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import edu.wisc.library.ocfl.api.MutableOcflRepository;
+import org.fcrepo.storage.ocfl.cache.Cache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +47,7 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
     private final Path stagingRoot;
     private final ObjectReader headerReader;
     private final ObjectWriter headerWriter;
+    private final Cache<String, ResourceHeaders> headersCache;
     private CommitType defaultCommitType;
     private final String defaultVersionMessage;
     private final String defaultVersionUserName;
@@ -58,6 +60,7 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
     public DefaultOcflObjectSessionFactory(final MutableOcflRepository ocflRepo,
                                            final Path stagingRoot,
                                            final ObjectMapper objectMapper,
+                                           final Cache<String, ResourceHeaders> headersCache,
                                            final CommitType defaultCommitType,
                                            final String defaultVersionMessage,
                                            final String defaultVersionUserName,
@@ -67,6 +70,7 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
         this.headerReader = Objects.requireNonNull(objectMapper, "objectMapper cannot be null")
                 .readerFor(ResourceHeaders.class);
         this.headerWriter = objectMapper.writerFor(ResourceHeaders.class);
+        this.headersCache = headersCache;
         this.defaultCommitType = Objects.requireNonNull(defaultCommitType, "defaultCommitType cannot be null");
         this.defaultVersionMessage = defaultVersionMessage;
         this.defaultVersionUserName = defaultVersionUserName;
@@ -87,6 +91,7 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
                 headerReader,
                 headerWriter,
                 defaultCommitType,
+                headersCache,
                 () -> sessions.remove(sessionId)
         );
 

@@ -18,11 +18,17 @@
 
 package org.fcrepo.storage.ocfl;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+
 import java.net.URI;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Resource headers contain metadata about Fedora resources in Fedora 6.
@@ -32,29 +38,104 @@ import java.util.Objects;
  * @author bbpennel
  * @author pwinckles
  */
+@JsonDeserialize(builder = ResourceHeaders.Builder.class)
 public class ResourceHeaders {
 
-    private String id;
-    private String parent;
-    private String stateToken;
-    private String interactionModel;
-    private String mimeType;
-    private String filename;
-    private Long contentSize;
-    private Collection<URI> digests;
-    private String externalUrl;
-    private String externalHandling;
-    private Instant createdDate;
-    private String createdBy;
-    private Instant lastModifiedDate;
-    private String lastModifiedBy;
-    private boolean archivalGroup;
-    private boolean objectRoot;
-    private boolean deleted;
-    private String contentPath;
+    private final String id;
+    private final String parent;
+    private final String stateToken;
+    private final String interactionModel;
+    private final String mimeType;
+    private final String filename;
+    private final Long contentSize;
+    private final Collection<URI> digests;
+    private final String externalUrl;
+    private final String externalHandling;
+    private final Instant createdDate;
+    private final String createdBy;
+    private final Instant lastModifiedDate;
+    private final String lastModifiedBy;
+    private final boolean archivalGroup;
+    private final boolean objectRoot;
+    private final boolean deleted;
+    private final String contentPath;
 
-    public ResourceHeaders() {
-        digests = new ArrayList<>();
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static Builder builder(final ResourceHeaders original) {
+        return new Builder(original);
+    }
+
+    private ResourceHeaders(final Builder builder) {
+        this(builder.id,
+                builder.parent,
+                builder.stateToken,
+                builder.interactionModel,
+                builder.mimeType,
+                builder.filename,
+                builder.contentSize,
+                builder.digests,
+                builder.externalUrl,
+                builder.externalHandling,
+                builder.createdDate,
+                builder.createdBy,
+                builder.lastModifiedDate,
+                builder.lastModifiedBy,
+                builder.archivalGroup,
+                builder.objectRoot,
+                builder.deleted,
+                builder.contentPath);
+    }
+
+    private ResourceHeaders(final String id,
+                           final String parent,
+                           final String stateToken,
+                           final String interactionModel,
+                           final String mimeType,
+                           final String filename,
+                           final Long contentSize,
+                           final Collection<URI> digests,
+                           final String externalUrl,
+                           final String externalHandling,
+                           final Instant createdDate,
+                           final String createdBy,
+                           final Instant lastModifiedDate,
+                           final String lastModifiedBy,
+                           final boolean archivalGroup,
+                           final boolean objectRoot,
+                           final boolean deleted,
+                           final String contentPath) {
+        this.id = id;
+        this.parent = parent;
+        this.stateToken = stateToken;
+        this.interactionModel = interactionModel;
+        this.mimeType = mimeType;
+        this.filename = filename;
+        this.contentSize = contentSize;
+        if (digests == null) {
+            this.digests = Collections.emptyList();
+        } else {
+            // This is necessary so that ResourceHeaders.equals() still works as expected in tests
+            if (digests instanceof List) {
+                this.digests = Collections.unmodifiableList((List<URI>) digests);
+            } else if (digests instanceof Set) {
+                this.digests = Collections.unmodifiableSet((Set<URI>) digests);
+            } else {
+                this.digests = Collections.unmodifiableCollection(digests);
+            }
+        }
+        this.externalUrl = externalUrl;
+        this.externalHandling = externalHandling;
+        this.createdDate = createdDate;
+        this.createdBy = createdBy;
+        this.lastModifiedDate = lastModifiedDate;
+        this.lastModifiedBy = lastModifiedBy;
+        this.archivalGroup = archivalGroup;
+        this.objectRoot = objectRoot;
+        this.deleted = deleted;
+        this.contentPath = contentPath;
     }
 
     /**
@@ -65,24 +146,10 @@ public class ResourceHeaders {
     }
 
     /**
-     * @param id the fedora id to set
-     */
-    public void setId(final String id) {
-        this.id = id;
-    }
-
-    /**
      * @return the parent fedora id
      */
     public String getParent() {
         return parent;
-    }
-
-    /**
-     * @param parent the parent to set
-     */
-    public void setParent(final String parent) {
-        this.parent = parent;
     }
 
     /**
@@ -93,24 +160,10 @@ public class ResourceHeaders {
     }
 
     /**
-     * @param stateToken the stateToken to set
-     */
-    public void setStateToken(final String stateToken) {
-        this.stateToken = stateToken;
-    }
-
-    /**
      * @return the interactionModel
      */
     public String getInteractionModel() {
         return interactionModel;
-    }
-
-    /**
-     * @param interactionModel the interactionModel to set
-     */
-    public void setInteractionModel(final String interactionModel) {
-        this.interactionModel = interactionModel;
     }
 
     /**
@@ -121,24 +174,10 @@ public class ResourceHeaders {
     }
 
     /**
-     * @param mimeType the mimeType to set
-     */
-    public void setMimeType(final String mimeType) {
-        this.mimeType = mimeType;
-    }
-
-    /**
      * @return the filename
      */
     public String getFilename() {
         return filename;
-    }
-
-    /**
-     * @param filename the filename to set
-     */
-    public void setFilename(final String filename) {
-        this.filename = filename;
     }
 
     /**
@@ -149,28 +188,10 @@ public class ResourceHeaders {
     }
 
     /**
-     * @param contentSize the contentSize to set
-     */
-    public void setContentSize(final Long contentSize) {
-        this.contentSize = contentSize;
-    }
-
-    /**
      * @return the digests
      */
     public Collection<URI> getDigests() {
         return digests;
-    }
-
-    /**
-     * @param digests the digests to set
-     */
-    public void setDigests(final Collection<URI> digests) {
-        if (digests == null) {
-            this.digests = new ArrayList<>();
-        } else {
-            this.digests = digests;
-        }
     }
 
     /**
@@ -181,24 +202,10 @@ public class ResourceHeaders {
     }
 
     /**
-     * @param externalHandling the externalHandling to set
-     */
-    public void setExternalHandling(final String externalHandling) {
-        this.externalHandling = externalHandling;
-    }
-
-    /**
      * @return the createdDate
      */
     public Instant getCreatedDate() {
         return createdDate;
-    }
-
-    /**
-     * @param createdDate the createdDate to set
-     */
-    public void setCreatedDate(final Instant createdDate) {
-        this.createdDate = createdDate;
     }
 
     /**
@@ -209,24 +216,10 @@ public class ResourceHeaders {
     }
 
     /**
-     * @param createdBy the createdBy to set
-     */
-    public void setCreatedBy(final String createdBy) {
-        this.createdBy = createdBy;
-    }
-
-    /**
      * @return the lastModifiedDate
      */
     public Instant getLastModifiedDate() {
         return lastModifiedDate;
-    }
-
-    /**
-     * @param lastModifiedDate the lastModifiedDate to set
-     */
-    public void setLastModifiedDate(final Instant lastModifiedDate) {
-        this.lastModifiedDate = lastModifiedDate;
     }
 
     /**
@@ -237,20 +230,6 @@ public class ResourceHeaders {
     }
 
     /**
-     * @param lastModifiedby the lastModifiedby to set
-     */
-    public void setLastModifiedBy(final String lastModifiedby) {
-        this.lastModifiedBy = lastModifiedby;
-    }
-
-    /**
-     * @param externalUrl the externalUrl to set
-     */
-    public void setExternalUrl(final String externalUrl) {
-        this.externalUrl = externalUrl;
-    }
-
-    /**
      * @return the externalUrl
      */
     public String getExternalUrl() {
@@ -258,25 +237,10 @@ public class ResourceHeaders {
     }
 
     /**
-     *
-     * @param flag boolean flag
-     */
-    public void setArchivalGroup(final boolean flag) {
-        this.archivalGroup = flag;
-    }
-
-    /**
      * @return if it is an archival group
      */
     public boolean isArchivalGroup() {
         return archivalGroup;
-    }
-
-    /**
-     * @param flag boolean flag
-     */
-    public void setObjectRoot(final boolean flag) {
-        this.objectRoot = flag;
     }
 
     /**
@@ -291,14 +255,6 @@ public class ResourceHeaders {
     }
 
     /**
-     * Set deleted status flag.
-     * @param deleted true if deleted (a tombstone).
-     */
-    public void setDeleted(final boolean deleted) {
-        this.deleted = deleted;
-    }
-
-    /**
      * @return if the resource is deleted
      */
     public boolean isDeleted() {
@@ -310,13 +266,6 @@ public class ResourceHeaders {
      */
     public String getContentPath() {
         return contentPath;
-    }
-
-    /**
-     * @param contentPath the path to the associated content file
-     */
-    public void setContentPath(final String contentPath) {
-        this.contentPath = contentPath;
     }
 
     @Override
@@ -380,6 +329,159 @@ public class ResourceHeaders {
                 externalHandling, createdDate, createdBy,
                 lastModifiedDate, lastModifiedBy, archivalGroup,
                 objectRoot, deleted, contentPath);
+    }
+
+    /**
+     * Builder for creating/mutating ResourceHeaders
+     */
+    @JsonPOJOBuilder
+    public static class Builder {
+
+        private String id;
+        private String parent;
+        private String stateToken;
+        private String interactionModel;
+        private String mimeType;
+        private String filename;
+        private Long contentSize;
+        private Collection<URI> digests;
+        private String externalUrl;
+        private String externalHandling;
+        private Instant createdDate;
+        private String createdBy;
+        private Instant lastModifiedDate;
+        private String lastModifiedBy;
+        private boolean archivalGroup;
+        private boolean objectRoot;
+        private boolean deleted;
+        private String contentPath;
+
+        public Builder() {
+
+        }
+
+        public Builder(final ResourceHeaders original) {
+            this.id = original.getId();
+            this.parent = original.getParent();
+            this.stateToken = original.getStateToken();
+            this.interactionModel = original.getInteractionModel();
+            this.mimeType = original.getMimeType();
+            this.filename = original.getFilename();
+            this.contentSize = original.getContentSize();
+            this.digests = new ArrayList<>(original.getDigests());
+            this.externalUrl = original.getExternalUrl();
+            this.externalHandling = original.getExternalHandling();
+            this.createdDate = original.getCreatedDate();
+            this.createdBy = original.getCreatedBy();
+            this.lastModifiedDate = original.getLastModifiedDate();
+            this.lastModifiedBy = original.getLastModifiedBy();
+            this.archivalGroup = original.isArchivalGroup();
+            this.objectRoot = original.isObjectRoot();
+            this.deleted = original.isDeleted();
+            this.contentPath = original.getContentPath();
+        }
+
+        public Builder withId(final String id) {
+            this.id = id;
+            return this;
+        }
+
+        public Builder withParent(final String parent) {
+            this.parent = parent;
+            return this;
+        }
+
+        public Builder withStateToken(final String stateToken) {
+            this.stateToken = stateToken;
+            return this;
+        }
+
+        public Builder withInteractionModel(final String interactionModel) {
+            this.interactionModel = interactionModel;
+            return this;
+        }
+
+        public Builder withMimeType(final String mimeType) {
+            this.mimeType = mimeType;
+            return this;
+        }
+
+        public Builder withFilename(final String filename) {
+            this.filename = filename;
+            return this;
+        }
+
+        public Builder withContentSize(final Long contentSize) {
+            this.contentSize = contentSize;
+            return this;
+        }
+
+        public Builder withDigests(final Collection<URI> digests) {
+            this.digests = digests;
+            return this;
+        }
+
+        public Builder addDigest(final URI digest) {
+            if (digests == null) {
+                digests = new ArrayList<>();
+            }
+            digests.add(digest);
+            return this;
+        }
+
+        public Builder withExternalUrl(final String externalUrl) {
+            this.externalUrl = externalUrl;
+            return this;
+        }
+
+        public Builder withExternalHandling(final String externalHandling) {
+            this.externalHandling = externalHandling;
+            return this;
+        }
+
+        public Builder withCreatedDate(final Instant createdDate) {
+            this.createdDate = createdDate;
+            return this;
+        }
+
+        public Builder withCreatedBy(final String createdBy) {
+            this.createdBy = createdBy;
+            return this;
+        }
+
+        public Builder withLastModifiedDate(final Instant lastModifiedDate) {
+            this.lastModifiedDate = lastModifiedDate;
+            return this;
+        }
+
+        public Builder withLastModifiedBy(final String lastModifiedBy) {
+            this.lastModifiedBy = lastModifiedBy;
+            return this;
+        }
+
+        public Builder withArchivalGroup(final boolean archivalGroup) {
+            this.archivalGroup = archivalGroup;
+            return this;
+        }
+
+        public Builder withObjectRoot(final boolean objectRoot) {
+            this.objectRoot = objectRoot;
+            return this;
+        }
+
+        public Builder withDeleted(final boolean deleted) {
+            this.deleted = deleted;
+            return this;
+        }
+
+        public Builder withContentPath(final String contentPath) {
+            this.contentPath = contentPath;
+            return this;
+        }
+
+        public ResourceHeaders build() {
+            return new ResourceHeaders(this);
+        }
     }
 
 }
