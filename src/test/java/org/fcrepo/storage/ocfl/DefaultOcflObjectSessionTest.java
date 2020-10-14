@@ -21,6 +21,8 @@ package org.fcrepo.storage.ocfl;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import edu.wisc.library.ocfl.api.MutableOcflRepository;
 import edu.wisc.library.ocfl.api.exception.FixityCheckException;
 import edu.wisc.library.ocfl.api.model.ObjectVersionId;
@@ -28,7 +30,10 @@ import edu.wisc.library.ocfl.core.OcflRepositoryBuilder;
 import edu.wisc.library.ocfl.core.extension.storage.layout.config.HashedTruncatedNTupleConfig;
 import edu.wisc.library.ocfl.core.path.mapper.LogicalPathMappers;
 import edu.wisc.library.ocfl.core.storage.filesystem.FileSystemOcflStorage;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang3.SystemUtils;
+import org.fcrepo.storage.ocfl.cache.CaffeineCache;
+import org.fcrepo.storage.ocfl.cache.NoOpCache;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -50,6 +55,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
@@ -77,6 +83,8 @@ public class DefaultOcflObjectSessionTest {
 
     private MutableOcflRepository ocflRepo;
     private OcflObjectSessionFactory sessionFactory;
+    private OcflObjectSessionFactory cachedSessionFactory;
+    private Cache<String, ResourceHeaders> cache;
 
     private static final String ROOT = "info:fedora";
     private static final String DEFAULT_AG_ID = "info:fedora/foo";
@@ -106,7 +114,18 @@ public class DefaultOcflObjectSessionTest {
                 .registerModule(new JavaTimeModule())
                 .setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
-        sessionFactory = new DefaultOcflObjectSessionFactory(ocflRepo, sessionStaging, objectMapper,
+        sessionFactory = new DefaultOcflObjectSessionFactory(ocflRepo,
+                sessionStaging,
+                objectMapper,
+                new NoOpCache<>(),
+                CommitType.NEW_VERSION, DEFAULT_MESSAGE, DEFAULT_USER, DEFAULT_ADDRESS);
+
+        cache = Caffeine.newBuilder().maximumSize(100).build();
+
+        cachedSessionFactory = new DefaultOcflObjectSessionFactory(ocflRepo,
+                sessionStaging,
+                objectMapper,
+                new CaffeineCache<>(cache),
                 CommitType.NEW_VERSION, DEFAULT_MESSAGE, DEFAULT_USER, DEFAULT_ADDRESS);
     }
 
@@ -186,7 +205,7 @@ public class DefaultOcflObjectSessionTest {
 
         final var agContent = ag(agId, ROOT, "foo");
         final var containerContent = container(containerId, agId, "bar");
-        final var binaryContent = binary(binaryId, containerId, "baz");
+        final var binaryContent = binary(binaryId, containerId, agId, "baz");
 
         write(session, agContent);
         write(session, containerContent);
@@ -208,6 +227,44 @@ public class DefaultOcflObjectSessionTest {
     }
 
     @Test
+    public void cacheTest() {
+        final var agId = "info:fedora/foo";
+        final var containerId = "info:fedora/foo/bar";
+        final var binaryId = "info:fedora/foo/bar/baz";
+
+        final var session = cachedSessionFactory.newSession(agId);
+
+        final var agContent = ag(agId, ROOT, "foo");
+        final var containerContent = container(containerId, agId, "bar");
+        final var binaryContent = binary(binaryId, containerId, agId, "baz");
+
+        write(session, agContent);
+        write(session, containerContent);
+        write(session, binaryContent);
+
+        final var stagedContent = session.readContent(binaryId);
+
+        assertResourceContent("baz", binaryContent, stagedContent);
+
+        assertEquals(0, cache.estimatedSize());
+
+        session.commit();
+
+        assertEquals(3, cache.estimatedSize());
+        assertTrue(cache.asMap().containsKey(agId + "_v1"));
+        assertTrue(cache.asMap().containsKey(containerId + "_v1"));
+        assertTrue(cache.asMap().containsKey(binaryId + "_v1"));
+
+        final var committedAg = session.readContent(agId);
+        final var committedContainer = session.readContent(containerId);
+        final var committedBinary = session.readContent(binaryId);
+
+        assertResourceContent("foo", agContent, committedAg);
+        assertResourceContent("bar", containerContent, committedContainer);
+        assertResourceContent("baz", binaryContent, committedBinary);
+    }
+
+    @Test
     public void writeNewBinaryAcl() {
         final var resourceId = "info:fedora/foo/bar";
         final var aclId = "info:fedora/foo/bar/fcr:acl";
@@ -215,7 +272,7 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(resourceId);
 
         final var content = atomicBinary(resourceId, "info:fedora/foo", "blah");
-        final var acl = acl(aclId, resourceId, "acl");
+        final var acl = acl(false, aclId, resourceId, "acl");
 
         write(session, content);
         write(session, acl);
@@ -235,7 +292,7 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(resourceId);
 
         final var content = atomicContainer(resourceId, "info:fedora/foo", "blah");
-        final var acl = acl(aclId, resourceId, "acl");
+        final var acl = acl(true, aclId, resourceId, "acl");
 
         write(session, content);
         write(session, acl);
@@ -299,20 +356,25 @@ public class DefaultOcflObjectSessionTest {
         assertTrue(existing.getContentStream().isPresent());
         close(existing);
 
-        existing.getHeaders().setDeleted(true);
+        final var deleteHeaders = ResourceHeaders.builder(existing.getHeaders())
+                .withContentPath(null)
+                .withContentSize(null)
+                .withDigests(null)
+                .withDeleted(true)
+                .build();
 
-        session1.deleteContentFile(existing.getHeaders());
+        session1.deleteContentFile(deleteHeaders);
 
         final var stagedDelete = session1.readContent(DEFAULT_AG_BINARY_ID);
 
-        assertEquals(existing.getHeaders(), stagedDelete.getHeaders());
+        assertEquals(deleteHeaders, stagedDelete.getHeaders());
         assertFalse(stagedDelete.getContentStream().isPresent());
 
         session1.commit();
 
         final var deleted = session1.readContent(DEFAULT_AG_BINARY_ID);
 
-        assertEquals(existing.getHeaders(), deleted.getHeaders());
+        assertEquals(deleteHeaders, deleted.getHeaders());
         assertFalse(deleted.getContentStream().isPresent());
 
         final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
@@ -430,14 +492,19 @@ public class DefaultOcflObjectSessionTest {
 
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        ag.getHeaders().setDeleted(true);
+        final var deleteHeaders = ResourceHeaders.builder(ag.getHeaders())
+                .withDeleted(true)
+                .withContentPath(null)
+                .withContentSize(null)
+                .withDigests(null)
+                .build();
 
-        session.deleteContentFile(ag.getHeaders());
+        session.deleteContentFile(deleteHeaders);
         session.commit();
 
         final var deletedContent = session.readContent(DEFAULT_AG_ID);
 
-        assertEquals(ag.getHeaders(), deletedContent.getHeaders());
+        assertEquals(deleteHeaders, deletedContent.getHeaders());
         assertFalse(deletedContent.getContentStream().isPresent());
     }
 
@@ -514,7 +581,7 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void ensurePathsAreSafeForWindows() {
         final var resourceId = "info:fedora/foo:bar";
-        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        final var session = sessionFactory.newSession(resourceId);
 
         final var content = atomicBinary(resourceId, ROOT, "stuff");
 
@@ -698,10 +765,11 @@ public class DefaultOcflObjectSessionTest {
     @Test(expected = FixityCheckException.class)
     public void failWhenProvidedDigestDoesNotMatchComputed() throws URISyntaxException {
         final var resourceId = "info:fedora/foo";
-        final var content = atomicBinary(resourceId, ROOT, "bar");
-        content.getHeaders().setDigests(List.of(
-                new URI("urn:sha-512:dc6b68d13b8cf959644b935f1192b02c71aa7a5cf653bd43b4480fa89eec8d4d3f16a" +
-                        "2278ec8c3b40ab1fdb233b3173a78fd83590d6f739e0c9e8ff56c282557")));
+        final var content = atomicBinary(resourceId, ROOT, "bar", headers -> {
+            headers.withDigests(List.of(
+                    URI.create("urn:sha-512:dc6b68d13b8cf959644b935f1192b02c71aa7a5cf653bd43b4480fa89eec8d4d3f16a" +
+                            "2278ec8c3b40ab1fdb233b3173a78fd83590d6f739e0c9e8ff56c282557")));
+        });
 
         final var session = sessionFactory.newSession(resourceId);
 
@@ -712,7 +780,6 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void addOcflDigestWhenNotProvided() throws URISyntaxException {
         final var resourceId = "info:fedora/foo";
-        final var content = atomicBinary(resourceId, ROOT, "bar");
 
         final var sha512Digest = "d82c4eb5261cb9c8aa9855edd67d1bd10482f41529858d925094d173fa662aa" +
                 "91ff39bc5b188615273484021dfb16fd8284cf684ccf0fc795be3aa2fc1e6c181";
@@ -721,7 +788,9 @@ public class DefaultOcflObjectSessionTest {
         final var digests = new ArrayList<URI>();
         digests.add(new URI("urn:sha-256:" + sha256Digest));
 
-        content.getHeaders().setDigests(digests);
+        final var content = atomicBinary(resourceId, ROOT, "bar", headers -> {
+            headers.withDigests(digests);
+        });
 
         final var session = sessionFactory.newSession(resourceId);
 
@@ -866,8 +935,14 @@ public class DefaultOcflObjectSessionTest {
 
         session.deleteContentFile(binary.getHeaders());
 
+        final var deleteHeaders = ResourceHeaders.builder(binary.getHeaders())
+                .withContentPath(null)
+                .withContentSize(null)
+                .withDigests(null)
+                .build();
+
         final var resources = listHeaders(session);
-        assertHeaders(resources, ag.getHeaders(), binary.getHeaders());
+        assertHeaders(resources, ag.getHeaders(), deleteHeaders);
 
         session.deleteResource(DEFAULT_AG_BINARY_ID);
 
@@ -1023,7 +1098,7 @@ public class DefaultOcflObjectSessionTest {
         assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
 
         final var resourceId = DEFAULT_AG_ID + "/fcr:acl";
-        final var content = acl(resourceId, DEFAULT_AG_ID, "blah");
+        final var content = acl(true, resourceId, DEFAULT_AG_ID, "blah");
 
         write(session, content);
         session.commit();
@@ -1089,8 +1164,9 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void failWriteWhenContentSizeDoesNotMatch() {
         final var resourceId = "info:fedora/foo";
-        final var content = atomicBinary(resourceId, ROOT, "first");
-        content.getHeaders().setContentSize(1024L);
+        final var content = atomicBinary(resourceId, ROOT, "first", headers -> {
+            headers.withContentSize(1024L);
+        });
 
         final var session = sessionFactory.newSession(resourceId);
 
@@ -1105,8 +1181,9 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void contentWriteFailuresShouldCleanupStagedFiles() throws IOException {
         final var resourceId = "info:fedora/foo";
-        final var content = atomicBinary(resourceId, ROOT, "first");
-        content.getHeaders().setContentSize(1024L);
+        final var content = atomicBinary(resourceId, ROOT, "first", headers -> {
+            headers.withContentSize(1024L);
+        });
 
         final var session = sessionFactory.newSession(resourceId);
 
@@ -1236,86 +1313,114 @@ public class DefaultOcflObjectSessionTest {
         return session.readContent(DEFAULT_AG_BINARY_ID);
     }
 
-    private ResourceContent atomicBinary(final String resourceId, final String parentId, final String content) {
+    private ResourceContent atomicBinary(final String resourceId,
+                                         final String parentId,
+                                         final String content,
+                                         final Consumer<ResourceHeaders.Builder> modifyHeaders) {
         final var headers = defaultHeaders(resourceId, parentId, content);
-        headers.setObjectRoot(true);
-        headers.setArchivalGroup(false);
-        headers.setInteractionModel(InteractionModel.NON_RDF.getUri());
-        headers.setMimeType("text/plain");
+        headers.withObjectRoot(true);
+        headers.withArchivalGroup(false);
+        headers.withInteractionModel(InteractionModel.NON_RDF.getUri());
+        headers.withMimeType("text/plain");
 
-        return new ResourceContent(stream(content), headers);
+        if (content != null) {
+            headers.withContentPath(PersistencePaths.nonRdfResource(resourceId, resourceId).getContentFilePath());
+        }
+
+        if (modifyHeaders != null) {
+            modifyHeaders.accept(headers);
+        }
+
+        return new ResourceContent(stream(content), headers.build());
+    }
+
+    private ResourceContent atomicBinary(final String resourceId, final String parentId, final String content) {
+        return atomicBinary(resourceId, parentId, content, null);
     }
 
     private ResourceContent binary(final String resourceId, final String parentId, final String content) {
-        final var headers = defaultHeaders(resourceId, parentId, content);
-        headers.setObjectRoot(false);
-        headers.setArchivalGroup(false);
-        headers.setInteractionModel(InteractionModel.NON_RDF.getUri());
-        headers.setMimeType("text/plain");
+        return binary(resourceId, parentId, parentId, content);
+    }
 
-        return new ResourceContent(stream(content), headers);
+    private ResourceContent binary(final String resourceId,
+                                   final String parentId,
+                                   final String rootResourceId,
+                                   final String content) {
+        final var headers = defaultHeaders(resourceId, parentId, content);
+        headers.withObjectRoot(false);
+        headers.withArchivalGroup(false);
+        headers.withInteractionModel(InteractionModel.NON_RDF.getUri());
+        headers.withMimeType("text/plain");
+        headers.withContentPath(PersistencePaths.nonRdfResource(rootResourceId, resourceId).getContentFilePath());
+        return new ResourceContent(stream(content), headers.build());
     }
 
     private ResourceContent atomicContainer(final String resourceId, final String parentId, final String content) {
         final var headers = defaultHeaders(resourceId, parentId, content);
-        headers.setObjectRoot(true);
-        headers.setArchivalGroup(false);
-        headers.setInteractionModel(InteractionModel.BASIC_CONTAINER.getUri());
-        headers.setMimeType("text/turtle");
-
-        return new ResourceContent(stream(content), headers);
+        headers.withObjectRoot(true);
+        headers.withArchivalGroup(false);
+        headers.withInteractionModel(InteractionModel.BASIC_CONTAINER.getUri());
+        headers.withMimeType("text/turtle");
+        headers.withContentPath(PersistencePaths.rdfResource(resourceId, resourceId).getContentFilePath());
+        return new ResourceContent(stream(content), headers.build());
     }
 
     private ResourceContent container(final String resourceId, final String parentId, final String content) {
         final var headers = defaultHeaders(resourceId, parentId, content);
-        headers.setObjectRoot(false);
-        headers.setArchivalGroup(false);
-        headers.setInteractionModel(InteractionModel.BASIC_CONTAINER.getUri());
-        headers.setMimeType("text/turtle");
-
-        return new ResourceContent(stream(content), headers);
+        headers.withObjectRoot(false);
+        headers.withArchivalGroup(false);
+        headers.withInteractionModel(InteractionModel.BASIC_CONTAINER.getUri());
+        headers.withMimeType("text/turtle");
+        headers.withContentPath(PersistencePaths.rdfResource(parentId, resourceId).getContentFilePath());
+        return new ResourceContent(stream(content), headers.build());
     }
 
     private ResourceContent ag(final String resourceId, final String parentId, final String content) {
         final var headers = defaultHeaders(resourceId, parentId, content);
-        headers.setObjectRoot(true);
-        headers.setArchivalGroup(true);
-        headers.setInteractionModel(InteractionModel.BASIC_CONTAINER.getUri());
-        headers.setMimeType("text/turtle");
-
-        return new ResourceContent(stream(content), headers);
+        headers.withObjectRoot(true);
+        headers.withArchivalGroup(true);
+        headers.withInteractionModel(InteractionModel.BASIC_CONTAINER.getUri());
+        headers.withMimeType("text/turtle");
+        headers.withContentPath(PersistencePaths.rdfResource(resourceId, resourceId).getContentFilePath());
+        return new ResourceContent(stream(content), headers.build());
     }
 
-    private ResourceContent acl(final String resourceId, final String parentId, final String content) {
+    private ResourceContent acl(final boolean describesRdf,
+                                final String resourceId,
+                                final String parentId,
+                                final String content) {
         final var headers = defaultHeaders(resourceId, parentId, content);
-        headers.setObjectRoot(false);
-        headers.setArchivalGroup(false);
-        headers.setInteractionModel(InteractionModel.ACL.getUri());
-        headers.setMimeType("text/turtle");
-
-        return new ResourceContent(stream(content), headers);
+        headers.withObjectRoot(false);
+        headers.withArchivalGroup(false);
+        headers.withInteractionModel(InteractionModel.ACL.getUri());
+        headers.withMimeType("text/turtle");
+        headers.withContentPath(PersistencePaths.aclResource(describesRdf, parentId, resourceId).getContentFilePath());
+        return new ResourceContent(stream(content), headers.build());
     }
 
     private ResourceContent desc(final String resourceId, final String parentId, final String content) {
         final var headers = defaultHeaders(resourceId, parentId, content);
-        headers.setObjectRoot(false);
-        headers.setArchivalGroup(false);
-        headers.setInteractionModel(InteractionModel.NON_RDF_DESCRIPTION.getUri());
-        headers.setMimeType("text/turtle");
-
-        return new ResourceContent(stream(content), headers);
+        headers.withObjectRoot(false);
+        headers.withArchivalGroup(false);
+        headers.withInteractionModel(InteractionModel.NON_RDF_DESCRIPTION.getUri());
+        headers.withMimeType("text/turtle");
+        headers.withContentPath(PersistencePaths.rdfResource(parentId, resourceId).getContentFilePath());
+        return new ResourceContent(stream(content), headers.build());
     }
 
-    private ResourceHeaders defaultHeaders(final String resourceId, final String parentId, final String content) {
-        final var headers = new ResourceHeaders();
-        headers.setId(resourceId);
-        headers.setParent(parentId);
-        headers.setCreatedBy(DEFAULT_USER);
-        headers.setCreatedDate(Instant.now());
-        headers.setLastModifiedBy(DEFAULT_USER);
-        headers.setLastModifiedDate(Instant.now());
+    private ResourceHeaders.Builder defaultHeaders(final String resourceId,
+                                                   final String parentId,
+                                                   final String content) {
+        final var headers = ResourceHeaders.builder();
+        headers.withId(resourceId);
+        headers.withParent(parentId);
+        headers.withCreatedBy(DEFAULT_USER);
+        headers.withCreatedDate(Instant.now());
+        headers.withLastModifiedBy(DEFAULT_USER);
+        headers.withLastModifiedDate(Instant.now());
         if (content != null) {
-            headers.setContentSize((long) content.length());
+            headers.withContentSize((long) content.length());
+            headers.addDigest(URI.create("urn:sha-512:" + DigestUtils.sha512Hex(content)));
         }
         return headers;
     }
@@ -1356,14 +1461,13 @@ public class DefaultOcflObjectSessionTest {
     }
 
     private void assertHeaders(final List<ResourceHeaders> actual, final ResourceHeaders... expected) {
-        Arrays.stream(expected).forEach(this::nullLastModified);
-        assertThat(actual, containsInAnyOrder(expected));
+        final var expectedArray = Arrays.stream(expected).map(this::nullLastModified).toArray(ResourceHeaders[]::new);
+        assertThat(actual, containsInAnyOrder(expectedArray));
     }
 
     private List<ResourceHeaders> listHeaders(final OcflObjectSession session) {
         final var resources = session.streamResourceHeaders().collect(Collectors.toList());
-        resources.forEach(this::nullLastModified);
-        return resources;
+        return resources.stream().map(this::nullLastModified).collect(Collectors.toList());
     }
 
     /**
@@ -1371,8 +1475,7 @@ public class DefaultOcflObjectSessionTest {
      * which makes it difficult to write assertions
      */
     private ResourceHeaders nullLastModified(final ResourceHeaders headers) {
-        headers.setLastModifiedDate(null);
-        return headers;
+        return ResourceHeaders.builder(headers).withLastModifiedDate(null).build();
     }
 
     private void assertVersions(final List<OcflVersionInfo> actual, final String... expected) {

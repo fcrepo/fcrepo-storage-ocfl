@@ -27,6 +27,7 @@ import edu.wisc.library.ocfl.core.extension.storage.layout.config.HashedTruncate
 import edu.wisc.library.ocfl.core.path.mapper.LogicalPathMappers;
 import edu.wisc.library.ocfl.core.storage.filesystem.FileSystemOcflStorage;
 import org.apache.commons.lang3.SystemUtils;
+import org.fcrepo.storage.ocfl.cache.NoOpCache;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -80,7 +81,10 @@ public class DefaultOcflObjectSessionFactoryTest {
                 .registerModule(new JavaTimeModule())
                 .setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
-        sessionFactory = new DefaultOcflObjectSessionFactory(ocflRepo, sessionStaging, objectMapper,
+        sessionFactory = new DefaultOcflObjectSessionFactory(ocflRepo,
+                sessionStaging,
+                objectMapper,
+                new NoOpCache<>(),
                 CommitType.NEW_VERSION, DEFAULT_MESSAGE, DEFAULT_USER, DEFAULT_ADDRESS);
     }
 

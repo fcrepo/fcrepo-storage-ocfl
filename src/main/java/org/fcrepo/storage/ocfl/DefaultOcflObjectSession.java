@@ -31,6 +31,7 @@ import edu.wisc.library.ocfl.api.model.VersionInfo;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.SystemUtils;
+import org.fcrepo.storage.ocfl.cache.Cache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,6 +89,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private final Path objectStaging;
     private final ObjectReader headerReader;
     private final ObjectWriter headerWriter;
+    private final Cache<String, ResourceHeaders> headersCache;
     private final Runnable deregisterHook;
 
     private final DigestAlgorithm digestAlgorithm;
@@ -95,6 +97,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private final VersionInfo versionInfo;
     private final Set<PathPair> deletePaths;
     private final Map<PathPair, String> digests;
+    private final Map<String, ResourceHeaders> stagedHeaders;
 
     private CommitType commitType;
     private String rootResourceId;
@@ -109,6 +112,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                                     final ObjectReader headerReader,
                                     final ObjectWriter headerWriter,
                                     final CommitType commitType,
+                                    final Cache<String, ResourceHeaders> headersCache,
                                     final Runnable deregisterHook) {
         this.sessionId = Objects.requireNonNull(sessionId, "sessionId cannot be null");
         this.ocflRepo = Objects.requireNonNull(ocflRepo, "ocflRepo cannot be null");
@@ -117,11 +121,13 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         this.headerReader = Objects.requireNonNull(headerReader, "headerReader cannot be null");
         this.headerWriter = Objects.requireNonNull(headerWriter, "headerWriter cannot be null");
         this.commitType = Objects.requireNonNull(commitType, "commitType cannot be null");
+        this.headersCache = Objects.requireNonNull(headersCache, "headersCache cannot be null");
         this.deregisterHook = Objects.requireNonNull(deregisterHook, "deregisterHook cannot be null");
 
         this.versionInfo = new VersionInfo();
         this.deletePaths = new HashSet<>();
         this.digests = new HashMap<>();
+        this.stagedHeaders = new HashMap<>();
         this.ocflOptions = new OcflOption[] {OcflOption.MOVE_SOURCE, OcflOption.OVERWRITE};
 
         loadRootResourceId();
@@ -139,7 +145,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     @Override
-    public synchronized void writeResource(final ResourceHeaders headers, final InputStream content) {
+    public synchronized ResourceHeaders writeResource(final ResourceHeaders headers, final InputStream content) {
         enforceOpen();
 
         final var paths = resolvePersistencePaths(headers);
@@ -154,6 +160,8 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         deletePaths.remove(headerPath);
 
         try {
+            final var headersBuilder = ResourceHeaders.builder(headers);
+
             if (content != null) {
                 contentDst = createStagingPath(contentPath);
                 var digest = getOcflDigest(headers.getDigests());
@@ -163,7 +171,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                     final var messageDigest = digestAlgorithm.getMessageDigest();
                     write(new DigestInputStream(content, messageDigest), contentDst);
                     digest = Hex.encodeHexString(messageDigest.digest());
-                    addDigestHeader(digest, headers);
+                    headersBuilder.addDigest(digestUri(digest));
                 } else {
                     write(content, contentDst);
                 }
@@ -180,12 +188,16 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                             headers.getId(), headers.getContentSize(), fileSize));
                 }
 
-                headers.setContentPath(contentPath.path);
-                headers.setContentSize(fileSize);
+                headersBuilder.withContentPath(contentPath.path)
+                        .withContentSize(fileSize);
             }
 
-            writeHeaders(headers, headerDst);
-            touchRelatedResources(headers);
+            final var finalHeaders = headersBuilder.build();
+
+            writeHeaders(finalHeaders, headerDst);
+            touchRelatedResources(finalHeaders);
+
+            return finalHeaders;
         } catch (RuntimeException e) {
             safeDelete(contentDst);
             safeDelete(headerDst);
@@ -211,10 +223,14 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                 digests.remove(path);
             }
 
-            headers.setContentPath(null);
+            final var finalHeaders = ResourceHeaders.builder(headers)
+                    .withContentPath(null)
+                    .withContentSize(null)
+                    .withDigests(null)
+                    .build();
 
             final var headerDst = createStagingPath(headerPath);
-            writeHeaders(headers, headerDst);
+            writeHeaders(finalHeaders, headerDst);
         }
     }
 
@@ -226,6 +242,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
             deleteObject = true;
             deletePaths.clear();
             digests.clear();
+            stagedHeaders.clear();
 
             if (Files.exists(objectStaging)) {
                 try {
@@ -239,6 +256,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
             final var existingHeaders = readHeaders(resourceId);
 
             deletePaths.add(headerPath);
+            stagedHeaders.remove(existingHeaders.getId());
 
             if (existingHeaders.getContentPath() != null) {
                 final var path = encode(existingHeaders.getContentPath());
@@ -276,9 +294,23 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     @Override
     public ResourceHeaders readHeaders(final String resourceId, final String versionNumber) {
+        if (versionNumber == null && stagedHeaders.containsKey(resourceId)) {
+            return stagedHeaders.get(resourceId);
+        }
+
         final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));
-        final var headerStream = readStream(headerPath, resourceId, versionNumber);
-        return readHeaders(headerStream);
+
+        if (isOpen() && deletePaths.contains(headerPath)) {
+            throw notFoundException(headerPath, resourceId);
+        }
+
+        final var resolvedVersionNum = resolveVersionNumber(resourceId, versionNumber);
+
+        return headersCache.get(cacheKey(resourceId, resolvedVersionNum), key -> {
+            LOG.trace("Cache miss for {}", key);
+            final var headerStream = readFromOcfl(headerPath, resourceId, resolvedVersionNum);
+            return parseHeaders(headerStream);
+        });
     }
 
     @Override
@@ -312,6 +344,13 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         return listFileVersions(resourceId, headerPath);
     }
 
+    /**
+     * This method is NOT currently using the ResourceHeader cache. It should not matter because this method is
+     * currently only used when reindexing. If it is ever used anywhere else, we may want to figure out how to
+     * get it to use the cache.
+     *
+     * @return ResourceHeader stream
+     */
     @Override
     public Stream<ResourceHeaders> streamResourceHeaders() {
         final var headerPaths = new HashSet<String>();
@@ -331,7 +370,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
             @Override
             public ResourceHeaders next() {
                 final var next = it.next();
-                return readHeaders(readStreamOptional(encode(next), null)
+                return parseHeaders(readStreamOptional(encode(next), null)
                         .orElseThrow(() -> new IllegalStateException("Unable to find resource header file " + next)));
             }
         }, headerPaths.size(), SPLITERATOR_OPTS), false);
@@ -368,6 +407,8 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
         final var hasMutableHead = ocflRepo.hasStagedChanges(ocflObjectId);
 
+        String newVersionNum = null;
+
         if (!deletePaths.isEmpty() || Files.exists(objectStaging)) {
             deletePathsFromStaging();
 
@@ -377,14 +418,20 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                     || hasMutableHeadAndShouldCreateNewVersion(hasMutableHead)) {
                 // Stage updates to mutable HEAD when auto-versioning disabled, or immediately before committing the
                 // mutable HEAD to a version when auto-versioning is enabled.
-                ocflRepo.stageChanges(ObjectVersionId.head(ocflObjectId), versionInfo, updater);
+                newVersionNum = ocflRepo.stageChanges(ObjectVersionId.head(ocflObjectId), versionInfo, updater)
+                        .getVersionId().toString();
             } else {
-                ocflRepo.updateObject(ObjectVersionId.head(ocflObjectId), versionInfo, updater);
+                newVersionNum = ocflRepo.updateObject(ObjectVersionId.head(ocflObjectId), versionInfo, updater)
+                        .getVersionId().toString();
             }
         }
 
         if (hasMutableHeadAndShouldCreateNewVersion(hasMutableHead)) {
             ocflRepo.commitStagedChanges(ocflObjectId, versionInfo);
+        }
+
+        if (newVersionNum != null) {
+            moveStagedHeadersToCache(newVersionNum);
         }
 
         cleanup();
@@ -431,8 +478,12 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     private InputStream readStream(final PathPair path, final String resourceId, final String versionNumber) {
         return readStreamOptional(path, versionNumber)
-                .orElseThrow(() -> new NotFoundException(String.format("File %s was not found for resource %s",
-                        path, resourceId)));
+                .orElseThrow(() -> notFoundException(path, resourceId));
+    }
+
+    private InputStream readFromOcfl(final PathPair path, final String resourceId, final String versionNumber) {
+        return readFromOcflOptional(path, versionNumber)
+                .orElseThrow(() -> notFoundException(path, resourceId));
     }
 
     private Optional<InputStream> readStreamOptional(final PathPair path, final String versionNumber) {
@@ -441,10 +492,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         }
 
         if (versionNumber != null) {
-            return readFromOcfl(path, versionNumber);
+            return readFromOcflOptional(path, versionNumber);
         }
 
-        return readFromStaging(path).or(() -> readFromOcfl(path, versionNumber));
+        return readFromStaging(path).or(() -> readFromOcflOptional(path, versionNumber));
     }
 
     private Optional<InputStream> readFromStaging(final PathPair path) {
@@ -461,10 +512,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         return Optional.empty();
     }
 
-    private Optional<InputStream> readFromOcfl(final PathPair path, final String versionNumber) {
+    private Optional<InputStream> readFromOcflOptional(final PathPair path, final String versionNumber) {
         try {
             if (!(deleteObject && isOpen())) {
-                if (ocflRepo.containsObject(ocflObjectId)) {
+                if (containsOcflObject()) {
                     final var object = ocflRepo.getObject(ObjectVersionId.version(ocflObjectId, versionNumber));
                     if (object.containsFile(path.path)) {
                         return Optional.of(object.getFile(path.path).getStream());
@@ -504,6 +555,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private void writeHeaders(final ResourceHeaders headers, final Path destination) {
         try {
             headerWriter.writeValue(destination.toFile(), headers);
+            stagedHeaders.put(headers.getId(), headers);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -533,8 +585,9 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     private void touchResource(final String resourceId, final Instant timestamp) {
-        final var headers = readHeaders(resourceId);
-        headers.setLastModifiedDate(timestamp);
+        final var headers = ResourceHeaders.builder(readHeaders(resourceId))
+                .withLastModifiedDate(timestamp)
+                .build();
 
         final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));
         final var headerDst = createStagingPath(headerPath);
@@ -572,7 +625,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         });
     }
 
-    private ResourceHeaders readHeaders(final InputStream stream) {
+    private ResourceHeaders parseHeaders(final InputStream stream) {
         try {
             return headerReader.readValue(stream);
         } catch (IOException e) {
@@ -595,14 +648,14 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     private boolean fileExistsInOcfl(final String path) {
-        if (ocflRepo.containsObject(ocflObjectId)) {
+        if (containsOcflObject()) {
             return ocflRepo.describeVersion(ObjectVersionId.head(ocflObjectId)).containsFile(path);
         }
         return false;
     }
 
     private boolean newInSession(final PathPair headerPath) {
-        if (ocflRepo.containsObject(ocflObjectId)) {
+        if (containsOcflObject()) {
             return !ocflRepo.describeVersion(ObjectVersionId.head(ocflObjectId)).containsFile(headerPath.path);
         }
         return true;
@@ -614,13 +667,16 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
      * exist but it does not contain a root resource, then an exception is thrown.
      */
     private void loadRootResourceId() {
-        if (ocflRepo.containsObject(ocflObjectId)) {
-            final var stream = readFromOcfl(encode(PersistencePaths.ROOT_HEADER_PATH), null);
+        if (containsOcflObject()) {
+            // This cannot be read from the cache because we do not know what the root resource id is
+            final var stream = readFromOcflOptional(encode(PersistencePaths.ROOT_HEADER_PATH), null);
 
             if (stream.isPresent()) {
-                final var headers = readHeaders(stream.get());
+                final var headers = parseHeaders(stream.get());
                 rootResourceId = headers.getId();
                 isArchivalGroup = headers.isArchivalGroup();
+                final var headVersion = ocflRepo.describeVersion(ObjectVersionId.head(ocflObjectId));
+                addToCache(rootResourceId, headVersion.getVersionId().toString(), headers);
             } else {
                 throw new IllegalStateException(
                         String.format("OCFL object %s exists but it does not contain a root Fedora resource",
@@ -712,7 +768,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     private Set<String> listCommittedHeaders() {
-        if (!(isOpen() && deleteObject) && ocflRepo.containsObject(ocflObjectId)) {
+        if (!(isOpen() && deleteObject) && containsOcflObject()) {
             return ocflRepo.describeVersion(ObjectVersionId.head(ocflObjectId)).getFiles()
                     .stream()
                     .map(FileDetails::getPath)
@@ -721,6 +777,18 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         }
 
         return Collections.emptySet();
+    }
+
+    private String resolveVersionNumber(final String resourceId, final String versionNumber) {
+        if (versionNumber == null) {
+            if (containsOcflObject()) {
+                final var headVersion = ocflRepo.describeVersion(ObjectVersionId.head(ocflObjectId));
+                return headVersion.getVersionId().toString();
+            }
+            throw new NotFoundException(String.format("Resource %s was not found.", resourceId));
+        }
+
+        return versionNumber;
     }
 
     private void cleanup() {
@@ -761,10 +829,6 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         return null;
     }
 
-    private void addDigestHeader(final String digest, final ResourceHeaders headers) {
-        headers.getDigests().add(digestUri(digest));
-    }
-
     private URI digestUri(final String digest) {
         try {
             return new URI("urn", digestAlgorithm.getJavaStandardName() + ":" + digest, null);
@@ -774,7 +838,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     private DigestAlgorithm identifyObjectDigestAlgorithm() {
-        if (ocflRepo.containsObject(ocflObjectId)) {
+        if (containsOcflObject()) {
             return ocflRepo.describeObject(ocflObjectId).getDigestAlgorithm();
         } else {
             return ocflRepo.config().getDefaultDigestAlgorithm();
@@ -793,6 +857,32 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                 LOG.error("Failed to delete staged file: {}", path);
             }
         }
+    }
+
+    private boolean containsOcflObject() {
+        return ocflRepo.containsObject(ocflObjectId);
+    }
+
+    private void moveStagedHeadersToCache(final String newVersionNum) {
+        stagedHeaders.forEach((id, headers) -> {
+            addToCache(id, newVersionNum, headers);
+        });
+        stagedHeaders.clear();
+    }
+
+    private void addToCache(final String resourceId, final String versionNumber, final ResourceHeaders headers) {
+        final var key = cacheKey(resourceId, versionNumber);
+        LOG.trace("Adding to cache {}", key);
+        headersCache.put(key, headers);
+    }
+
+    private String cacheKey(final String id, final String versionNum) {
+        return String.format("%s_%s", id, versionNum);
+    }
+
+    private NotFoundException notFoundException(final PathPair path, final String resourceId) {
+        return new NotFoundException(String.format("File %s was not found for resource %s",
+                path.path, resourceId));
     }
 
     private static class PathPair {
