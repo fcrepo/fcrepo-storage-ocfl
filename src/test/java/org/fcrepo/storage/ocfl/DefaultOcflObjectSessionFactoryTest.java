@@ -37,10 +37,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
 
 /**
  * @author pwinckles
@@ -94,37 +91,6 @@ public class DefaultOcflObjectSessionFactoryTest {
         final var session2 = sessionFactory.newSession("obj1");
 
         assertNotEquals(session1.sessionId(), session2.sessionId());
-    }
-
-    @Test
-    public void returnAnExistingOpenSession() {
-        final var session1 = sessionFactory.newSession("obj1");
-        final var session2 = sessionFactory.existingSession(session1.sessionId());
-
-        assertTrue(session2.isPresent());
-        assertEquals(session1.sessionId(), session2.get().sessionId());
-    }
-
-    @Test
-    public void returnNothingWhenThereIsNotAnExistingOpenSession() {
-        final var session1 = sessionFactory.newSession("obj1");
-
-        session1.abort();
-
-        final var session2 = sessionFactory.existingSession(session1.sessionId());
-
-        assertTrue(session2.isEmpty());
-    }
-
-    @Test
-    public void closeFactoryAndAllActiveSessions() {
-        final var session1 = sessionFactory.newSession("obj1");
-        final var session2 = sessionFactory.newSession("obj2");
-
-        sessionFactory.close();
-
-        assertFalse(session1.isOpen());
-        assertFalse(session2.isOpen());
     }
 
 }

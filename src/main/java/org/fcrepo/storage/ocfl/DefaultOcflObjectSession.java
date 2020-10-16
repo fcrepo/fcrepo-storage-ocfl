@@ -90,7 +90,6 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private final ObjectReader headerReader;
     private final ObjectWriter headerWriter;
     private final Cache<String, ResourceHeaders> headersCache;
-    private final Runnable deregisterHook;
 
     private final DigestAlgorithm digestAlgorithm;
     private final OcflOption[] ocflOptions;
@@ -112,8 +111,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                                     final ObjectReader headerReader,
                                     final ObjectWriter headerWriter,
                                     final CommitType commitType,
-                                    final Cache<String, ResourceHeaders> headersCache,
-                                    final Runnable deregisterHook) {
+                                    final Cache<String, ResourceHeaders> headersCache) {
         this.sessionId = Objects.requireNonNull(sessionId, "sessionId cannot be null");
         this.ocflRepo = Objects.requireNonNull(ocflRepo, "ocflRepo cannot be null");
         this.ocflObjectId = Objects.requireNonNull(ocflObjectId, "ocflObjectId cannot be null");
@@ -122,7 +120,6 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         this.headerWriter = Objects.requireNonNull(headerWriter, "headerWriter cannot be null");
         this.commitType = Objects.requireNonNull(commitType, "commitType cannot be null");
         this.headersCache = Objects.requireNonNull(headersCache, "headersCache cannot be null");
-        this.deregisterHook = Objects.requireNonNull(deregisterHook, "deregisterHook cannot be null");
 
         this.versionInfo = new VersionInfo();
         this.deletePaths = new HashSet<>();
@@ -795,7 +792,6 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         if (Files.exists(objectStaging)) {
             FileUtils.deleteQuietly(objectStaging.toFile());
         }
-        deregisterHook.run();
     }
 
     private void enforceOpen() {
