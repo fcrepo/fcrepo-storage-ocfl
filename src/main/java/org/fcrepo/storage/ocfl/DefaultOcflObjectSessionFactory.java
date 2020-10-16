@@ -27,12 +27,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Default OcflObjectSessionFactory implementation
@@ -52,8 +48,6 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
     private final String defaultVersionMessage;
     private final String defaultVersionUserName;
     private final String defaultVersionUserAddress;
-
-    private final Map<String, OcflObjectSession> sessions;
 
     private boolean closed = false;
 
@@ -75,7 +69,6 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
         this.defaultVersionMessage = defaultVersionMessage;
         this.defaultVersionUserName = defaultVersionUserName;
         this.defaultVersionUserAddress = defaultVersionUserAddress;
-        this.sessions = new ConcurrentHashMap<>();
     }
 
     @Override
@@ -91,35 +84,19 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
                 headerReader,
                 headerWriter,
                 defaultCommitType,
-                headersCache,
-                () -> sessions.remove(sessionId)
+                headersCache
         );
 
         session.versionAuthor(defaultVersionUserName, defaultVersionUserAddress);
         session.versionMessage(defaultVersionMessage);
 
-        sessions.put(sessionId, session);
         return session;
-    }
-
-    @Override
-    public Optional<OcflObjectSession> existingSession(final String sessionId) {
-        enforceOpen();
-        return Optional.ofNullable(sessions.get(sessionId));
     }
 
     @Override
     public void close() {
         if (!closed) {
             closed = true;
-            final var sessions = new ArrayList<>(this.sessions.values());
-            sessions.forEach(session -> {
-                try {
-                    session.abort();
-                } catch (RuntimeException e) {
-                    LOG.warn("Failed to close session {} cleanly.", session.sessionId(), e);
-                }
-            });
             ocflRepo.close();
         }
     }

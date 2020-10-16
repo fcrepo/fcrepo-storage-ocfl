@@ -18,8 +18,6 @@
 
 package org.fcrepo.storage.ocfl;
 
-import java.util.Optional;
-
 /**
  * Factory for creating OcflObjectSessions.
  *
@@ -36,15 +34,7 @@ public interface OcflObjectSessionFactory {
     OcflObjectSession newSession(final String ocflObjectId);
 
     /**
-     * Returns an existing session, if one exists.
-     *
-     * @param sessionId the id of an OcflObjectSession
-     * @return an existing session
-     */
-    Optional<OcflObjectSession> existingSession(final String sessionId);
-
-    /**
-     * Closes the underlying OCFL repository, and aborts all active sessions.
+     * Closes the underlying OCFL repository.
      */
     void close();
 
