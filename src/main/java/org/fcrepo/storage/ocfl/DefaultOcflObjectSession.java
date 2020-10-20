@@ -195,7 +195,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
             touchRelatedResources(finalHeaders);
 
             return finalHeaders;
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             safeDelete(contentDst);
             safeDelete(headerDst);
             throw e;
@@ -244,7 +244,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
             if (Files.exists(objectStaging)) {
                 try {
                     FileUtils.deleteDirectory(objectStaging.toFile());
-                } catch (IOException e) {
+                } catch (final IOException e) {
                     throw new UncheckedIOException("Failed to deleted staged files.", e);
                 }
             }
@@ -275,7 +275,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         if (stream.isPresent()) {
             try {
                 stream.get().close();
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 // Ignore
             }
             return true;
@@ -501,7 +501,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         if (Files.exists(stagingPath)) {
             try {
                 return Optional.of(Files.newInputStream(stagingPath));
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new UncheckedIOException(e);
             }
         }
@@ -519,7 +519,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                     }
                 }
             }
-        } catch (edu.wisc.library.ocfl.api.exception.NotFoundException e) {
+        } catch (final edu.wisc.library.ocfl.api.exception.NotFoundException e) {
             return Optional.empty();
         }
         return Optional.empty();
@@ -534,7 +534,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
         try {
             Files.createDirectories(stagingPath.getParent());
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException(e);
         }
 
@@ -544,7 +544,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private void write(final InputStream content, final Path destination) {
         try {
             Files.copy(content, destination, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException(e);
         }
     }
@@ -553,7 +553,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         try {
             headerWriter.writeValue(destination.toFile(), headers);
             stagedHeaders.put(headers.getId(), headers);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException(e);
         }
     }
@@ -564,26 +564,27 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                 && !Objects.equals(rootResourceId(), headers.getId())
                 && !InteractionModel.ACL.getUri().equals(headers.getInteractionModel())) {
             LOG.debug("Touching AG {} after updating {}", rootResourceId(), headers.getId());
-            touchResource(rootResourceId(), headers.getLastModifiedDate());
+            touchResource(rootResourceId(), headers.getLastModifiedDate(), headers.getStateToken());
         }
 
         if (InteractionModel.NON_RDF_DESCRIPTION.getUri().equals(headers.getInteractionModel())) {
             LOG.debug("Touching binary {} after updating {}", headers.getParent(), headers.getId());
-            touchResource(headers.getParent(), headers.getLastModifiedDate());
+            touchResource(headers.getParent(), headers.getLastModifiedDate(), headers.getStateToken());
         } else if (InteractionModel.NON_RDF.getUri().equals(headers.getInteractionModel())) {
             final var descriptionId = headers.getId() + "/" + PersistencePaths.FCR_METADATA;
             LOG.debug("Touching binary description {} after updating {}", descriptionId, headers.getId());
             try {
-                touchResource(descriptionId, headers.getLastModifiedDate());
-            } catch (NotFoundException e) {
+                touchResource(descriptionId, headers.getLastModifiedDate(), headers.getStateToken());
+            } catch (final NotFoundException e) {
                 // Ignore this exception because it just means that the binary description hasn't been created yet
             }
         }
     }
 
-    private void touchResource(final String resourceId, final Instant timestamp) {
+    private void touchResource(final String resourceId, final Instant timestamp, final String stateToken) {
         final var headers = ResourceHeaders.builder(readHeaders(resourceId))
                 .withLastModifiedDate(timestamp)
+                .withStateToken(stateToken)
                 .build();
 
         final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));
@@ -616,7 +617,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         deletePaths.stream().map(this::stagingPath).forEach(path -> {
             try {
                 Files.deleteIfExists(path);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new UncheckedIOException(e);
             }
         });
@@ -625,7 +626,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private ResourceHeaders parseHeaders(final InputStream stream) {
         try {
             return headerReader.readValue(stream);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException(e);
         }
     }
@@ -729,12 +730,12 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     private void addDecodedPaths(final OcflObjectUpdater updater, final OcflOption... ocflOptions) {
-        try (var paths = Files.walk(objectStaging)) {
+        try (final var paths = Files.walk(objectStaging)) {
             paths.filter(Files::isRegularFile).forEach(file -> {
                 final var logicalPath = stagingPathToLogicalPath(file);
                 updater.addPath(file, logicalPath, ocflOptions);
             });
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException(e);
         }
     }
@@ -751,12 +752,12 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     private Set<String> listStagedHeaders() {
         if (Files.exists(objectStaging)) {
-            try (var paths = Files.walk(objectStaging)) {
+            try (final var paths = Files.walk(objectStaging)) {
                 return paths.filter(Files::isRegularFile)
                         .map(this::stagingPathToLogicalPath)
                         .filter(PersistencePaths::isHeaderFile)
                         .collect(Collectors.toSet());
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new UncheckedIOException(e);
             }
         }
@@ -808,14 +809,14 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private long fileSize(final Path path) {
         try {
             return Files.size(path);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     private String getOcflDigest(final Collection<URI> headerDigests) {
         if (headerDigests != null) {
-            for (var uri : headerDigests) {
+            for (final var uri : headerDigests) {
                 final var parts = uri.getSchemeSpecificPart().split(":");
                 if (parts.length == 2 && digestAlgorithm.getJavaStandardName().equalsIgnoreCase(parts[0])) {
                     return parts[1];
@@ -828,7 +829,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private URI digestUri(final String digest) {
         try {
             return new URI("urn", digestAlgorithm.getJavaStandardName() + ":" + digest, null);
-        } catch (URISyntaxException e) {
+        } catch (final URISyntaxException e) {
             throw new RuntimeException(e);
         }
     }
@@ -849,7 +850,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         if (path != null) {
             try {
                 Files.deleteIfExists(path);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 LOG.error("Failed to delete staged file: {}", path);
             }
         }
