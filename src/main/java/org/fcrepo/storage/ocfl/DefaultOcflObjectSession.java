@@ -29,6 +29,7 @@ import edu.wisc.library.ocfl.api.model.FileDetails;
 import edu.wisc.library.ocfl.api.model.ObjectVersionId;
 import edu.wisc.library.ocfl.api.model.VersionInfo;
 import org.apache.commons.codec.binary.Hex;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.fcrepo.storage.ocfl.cache.Cache;
@@ -581,9 +582,14 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         }
     }
 
+    private static String generateStateToken(final Instant timestamp) {
+        return DigestUtils.md5Hex(String.valueOf(timestamp.toEpochMilli())).toUpperCase();
+    }
+
     private void touchResource(final String resourceId, final Instant timestamp) {
         final var headers = ResourceHeaders.builder(readHeaders(resourceId))
                 .withLastModifiedDate(timestamp)
+                .withStateToken(generateStateToken(timestamp))
                 .build();
 
         final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));

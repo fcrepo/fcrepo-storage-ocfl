@@ -217,11 +217,13 @@ public class DefaultOcflObjectSessionTest {
 
         session.commit();
 
+        final var correctAg = touch(agContent, binaryContent);
+
         final var committedAg = session.readContent(agId);
         final var committedContainer = session.readContent(containerId);
         final var committedBinary = session.readContent(binaryId);
 
-        assertResourceContent("foo", agContent, committedAg);
+        assertResourceContent("foo", correctAg, committedAg);
         assertResourceContent("bar", containerContent, committedContainer);
         assertResourceContent("baz", binaryContent, committedBinary);
     }
@@ -241,6 +243,7 @@ public class DefaultOcflObjectSessionTest {
         write(session, agContent);
         write(session, containerContent);
         write(session, binaryContent);
+        final var correctAg = touch(agContent, binaryContent);
 
         final var stagedContent = session.readContent(binaryId);
 
@@ -259,7 +262,7 @@ public class DefaultOcflObjectSessionTest {
         final var committedContainer = session.readContent(containerId);
         final var committedBinary = session.readContent(binaryId);
 
-        assertResourceContent("foo", agContent, committedAg);
+        assertResourceContent("foo", correctAg, committedAg);
         assertResourceContent("bar", containerContent, committedContainer);
         assertResourceContent("baz", binaryContent, committedBinary);
     }
@@ -397,6 +400,7 @@ public class DefaultOcflObjectSessionTest {
 
         write(session, ag);
         write(session, binary);
+        final var correctAg = touch(ag, binary);
 
         session.deleteContentFile(binary.getHeaders());
 
@@ -405,7 +409,7 @@ public class DefaultOcflObjectSessionTest {
         session.commit();
 
         expectResourceNotFound(DEFAULT_AG_BINARY_ID, session);
-        assertResourceContent("ag", ag, session.readContent(DEFAULT_AG_ID));
+        assertResourceContent("ag", correctAg, session.readContent(DEFAULT_AG_ID));
     }
 
     @Test
@@ -415,6 +419,7 @@ public class DefaultOcflObjectSessionTest {
         final var ag = ag(DEFAULT_AG_ID, ROOT, "ag");
         final var binary = binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "binary");
         final var binary2 = binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "binary2");
+        final var correctAg = touch(ag, binary2);
 
         write(session, ag);
         write(session, binary);
@@ -426,7 +431,7 @@ public class DefaultOcflObjectSessionTest {
 
         session.commit();
 
-        assertResourceContent("ag", ag, session.readContent(DEFAULT_AG_ID));
+        assertResourceContent("ag", correctAg, session.readContent(DEFAULT_AG_ID));
         assertResourceContent("binary2", binary2, session.readContent(DEFAULT_AG_BINARY_ID));
     }
 
@@ -899,12 +904,14 @@ public class DefaultOcflObjectSessionTest {
         final var binary = defaultAgBinary();
         close(ag);
         close(binary);
+        // Correct ag last modified and state token to binary child creation.
+        final var correctAg = touch(ag, binary);
 
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
 
         final var resources = listHeaders(session);
 
-        assertHeaders(resources, ag.getHeaders(), binary.getHeaders());
+        assertHeaders(resources, correctAg.getHeaders(), binary.getHeaders());
     }
 
     @Test
@@ -919,9 +926,12 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
         write(session, binaryUpdate);
 
+        // Match ag last modified and state token to binary child update.
+        final var correctAg = touch(ag, binaryUpdate);
+
         final var resources = listHeaders(session);
 
-        assertHeaders(resources, ag.getHeaders(), binaryUpdate.getHeaders());
+        assertHeaders(resources, correctAg.getHeaders(), binaryUpdate.getHeaders());
     }
 
     @Test
@@ -934,6 +944,8 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
 
         session.deleteContentFile(binary.getHeaders());
+        // Match ag lastmodified and state token to binary child.
+        final var correctAg1 = touch(ag, binary);
 
         final var deleteHeaders = ResourceHeaders.builder(binary.getHeaders())
                 .withContentPath(null)
@@ -942,12 +954,14 @@ public class DefaultOcflObjectSessionTest {
                 .build();
 
         final var resources = listHeaders(session);
-        assertHeaders(resources, ag.getHeaders(), deleteHeaders);
+        assertHeaders(resources, correctAg1.getHeaders(), deleteHeaders);
 
         session.deleteResource(DEFAULT_AG_BINARY_ID);
 
+        // Match ag lastmodified and state token to deletion of binary child.
+        final var correctAg2 = touch(ag, deleteHeaders);
         final var resources2 = listHeaders(session);
-        assertHeaders(resources2, ag.getHeaders());
+        assertHeaders(resources2, correctAg2.getHeaders());
     }
 
     @Test
@@ -1287,7 +1301,7 @@ public class DefaultOcflObjectSessionTest {
         } else {
             assertEquals(content, toString(actual.getContentStream()));
         }
-        assertEquals(nullLastModified(expected.getHeaders()), nullLastModified(actual.getHeaders()));
+        assertEquals(expected.getHeaders(), actual.getHeaders());
     }
 
     private void expectResourceNotFound(final String resourceId, final OcflObjectSession session) {
@@ -1417,7 +1431,9 @@ public class DefaultOcflObjectSessionTest {
         headers.withCreatedBy(DEFAULT_USER);
         headers.withCreatedDate(Instant.now());
         headers.withLastModifiedBy(DEFAULT_USER);
-        headers.withLastModifiedDate(Instant.now());
+        final Instant now = Instant.now();
+        headers.withLastModifiedDate(now);
+        headers.withStateToken(DigestUtils.md5Hex(String.valueOf(now.toEpochMilli())).toUpperCase());
         if (content != null) {
             headers.withContentSize((long) content.length());
             headers.addDigest(URI.create("urn:sha-512:" + DigestUtils.sha512Hex(content)));
@@ -1461,21 +1477,12 @@ public class DefaultOcflObjectSessionTest {
     }
 
     private void assertHeaders(final List<ResourceHeaders> actual, final ResourceHeaders... expected) {
-        final var expectedArray = Arrays.stream(expected).map(this::nullLastModified).toArray(ResourceHeaders[]::new);
+        final var expectedArray = Arrays.stream(expected).toArray(ResourceHeaders[]::new);
         assertThat(actual, containsInAnyOrder(expectedArray));
     }
 
     private List<ResourceHeaders> listHeaders(final OcflObjectSession session) {
-        final var resources = session.streamResourceHeaders().collect(Collectors.toList());
-        return resources.stream().map(this::nullLastModified).collect(Collectors.toList());
-    }
-
-    /**
-     * Null the last modified date because its exact value is often not know,
-     * which makes it difficult to write assertions
-     */
-    private ResourceHeaders nullLastModified(final ResourceHeaders headers) {
-        return ResourceHeaders.builder(headers).withLastModifiedDate(null).build();
+        return session.streamResourceHeaders().collect(Collectors.toList());
     }
 
     private void assertVersions(final List<OcflVersionInfo> actual, final String... expected) {
@@ -1485,4 +1492,20 @@ public class DefaultOcflObjectSessionTest {
         assertThat(versionNums, contains(expected));
     }
 
+    /**
+     * Align the lastModifiedDate and stateToken to that of the related headers.
+     * @param modifiedResource the resource to modify
+     * @param relatedHeaders the resource headers to use for the modifying values.
+     * @return the modifiedResource with new lastModifiedDate and stateToken headers.
+     */
+    private ResourceContent touch(final ResourceContent modifiedResource, final ResourceHeaders relatedHeaders) {
+        final var newHeaders = ResourceHeaders.builder(modifiedResource.getHeaders())
+                .withLastModifiedDate(relatedHeaders.getLastModifiedDate())
+                .withStateToken(relatedHeaders.getStateToken()).build();
+        return new ResourceContent(modifiedResource.getContentStream(), newHeaders);
+    }
+
+    private ResourceContent touch(final ResourceContent modifiedResource, final ResourceContent relatedResource) {
+        return touch(modifiedResource, relatedResource.getHeaders());
+    }
 }
