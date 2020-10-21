@@ -1298,6 +1298,8 @@ public class DefaultOcflObjectSessionTest {
         // Create AG and child resource
         final var ag = defaultAg();
         final var binaryChild = defaultAgBinary();
+        close(ag);
+        close(binaryChild);
         // Time passes
         Thread.sleep(1000);
 
