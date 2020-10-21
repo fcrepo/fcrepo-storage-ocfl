@@ -228,6 +228,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
             final var headerDst = createStagingPath(headerPath);
             writeHeaders(finalHeaders, headerDst);
+            touchRelatedResources(finalHeaders);
         }
     }
 

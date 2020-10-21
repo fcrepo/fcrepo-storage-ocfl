@@ -1293,6 +1293,33 @@ public class DefaultOcflObjectSessionTest {
         assertVersions(session5.listVersions(binary2Id), "v2");
     }
 
+    @Test
+    public void testDeleteChildInAgUpdatesAg() throws Exception {
+        // Create AG and child resource
+        final var ag = defaultAg();
+        final var binaryChild = defaultAgBinary();
+        // Time passes
+        Thread.sleep(1000);
+
+        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+        final var now = Instant.now();
+        // Mark the child as deleted
+        final var deleteHeaders = ResourceHeaders.builder(binaryChild.getHeaders())
+                .withContentPath(null)
+                .withContentSize(null)
+                .withDigests(null)
+                .withDeleted(true)
+                .withLastModifiedDate(now)
+                .withStateToken(getStateToken(now))
+                .build();
+        session.deleteContentFile(deleteHeaders);
+
+        // The AG should have an updated timestamp to indicate it was altered
+        final var correctAg = touch(ag, deleteHeaders);
+        final var resources = listHeaders(session);
+        assertHeaders(resources, correctAg.getHeaders(), deleteHeaders);
+    }
+
     private void assertResourceContent(final String content,
                                        final ResourceContent expected,
                                        final ResourceContent actual) {
@@ -1433,12 +1460,16 @@ public class DefaultOcflObjectSessionTest {
         headers.withLastModifiedBy(DEFAULT_USER);
         final Instant now = Instant.now();
         headers.withLastModifiedDate(now);
-        headers.withStateToken(DigestUtils.md5Hex(String.valueOf(now.toEpochMilli())).toUpperCase());
+        headers.withStateToken(getStateToken(now));
         if (content != null) {
             headers.withContentSize((long) content.length());
             headers.addDigest(URI.create("urn:sha-512:" + DigestUtils.sha512Hex(content)));
         }
         return headers;
+    }
+
+    private String getStateToken(final Instant timestamp) {
+        return DigestUtils.md5Hex(String.valueOf(timestamp.toEpochMilli())).toUpperCase();
     }
 
     private InputStream stream(final String value) {
