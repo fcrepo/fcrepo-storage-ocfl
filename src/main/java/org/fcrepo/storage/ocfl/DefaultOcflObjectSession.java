@@ -417,10 +417,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                 // Stage updates to mutable HEAD when auto-versioning disabled, or immediately before committing the
                 // mutable HEAD to a version when auto-versioning is enabled.
                 newVersionNum = ocflRepo.stageChanges(ObjectVersionId.head(ocflObjectId), versionInfo, updater)
-                        .getVersionId().toString();
+                        .getVersionNum().toString();
             } else {
                 newVersionNum = ocflRepo.updateObject(ObjectVersionId.head(ocflObjectId), versionInfo, updater)
-                        .getVersionId().toString();
+                        .getVersionNum().toString();
             }
         }
 
@@ -638,10 +638,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         return ocflRepo.fileChangeHistory(ocflObjectId, headerPath).getFileChanges().stream()
                 .filter(change -> change.getChangeType() == FileChangeType.UPDATE)
                 // do not include changes that were made in the mutable head
-                .filter(change -> !(headDesc.isMutable() && headDesc.getVersionId().equals(change.getVersionId())))
+                .filter(change -> !(headDesc.isMutable() && headDesc.getVersionNum().equals(change.getVersionNum())))
                 .map(change -> {
                     return new OcflVersionInfo(resourceId, ocflObjectId,
-                            change.getVersionId().toString(),
+                            change.getVersionNum().toString(),
                             toMementoInstant(change.getTimestamp()));
                 }).collect(Collectors.toList());
     }
@@ -675,7 +675,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                 rootResourceId = headers.getId();
                 isArchivalGroup = headers.isArchivalGroup();
                 final var headVersion = ocflRepo.describeVersion(ObjectVersionId.head(ocflObjectId));
-                addToCache(rootResourceId, headVersion.getVersionId().toString(), headers);
+                addToCache(rootResourceId, headVersion.getVersionNum().toString(), headers);
             } else {
                 throw new IllegalStateException(
                         String.format("OCFL object %s exists but it does not contain a root Fedora resource",
@@ -782,7 +782,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         if (versionNumber == null) {
             if (containsOcflObject()) {
                 final var headVersion = ocflRepo.describeVersion(ObjectVersionId.head(ocflObjectId));
-                return headVersion.getVersionId().toString();
+                return headVersion.getVersionNum().toString();
             }
             throw new NotFoundException(String.format("Resource %s was not found.", resourceId));
         }
