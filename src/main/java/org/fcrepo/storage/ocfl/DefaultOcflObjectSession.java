@@ -203,6 +203,21 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     @Override
+    public synchronized void writeHeaders(final ResourceHeaders headers) {
+        enforceOpen();
+
+        final var paths = resolvePersistencePaths(headers);
+
+        final var headerPath = encode(paths.getHeaderFilePath());
+        final var headerDst = createStagingPath(headerPath);
+
+        deletePaths.remove(headerPath);
+
+        writeHeaders(headers, headerDst);
+        touchRelatedResources(headers);
+    }
+
+    @Override
     public synchronized void deleteContentFile(final ResourceHeaders headers) {
         enforceOpen();
 

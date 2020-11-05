@@ -175,6 +175,36 @@ public class DefaultOcflObjectSessionTest {
     }
 
     @Test
+    public void updateResourceHeaders() {
+        final var resourceId = "info:fedora/foo/bar";
+
+        final var session1 = sessionFactory.newSession(resourceId);
+        final var content1 = atomicBinary(resourceId, "info:fedora/foo", "Test");
+
+        write(session1, content1);
+        session1.commit();
+
+        final var session2 = sessionFactory.newSession(resourceId);
+
+        final var timestamp = Instant.now().plusSeconds(60);
+        final var state = "new-state-token";
+
+        final var existingHeaders = session2.readHeaders(resourceId);
+        final var updatedHeaders = ResourceHeaders.builder(existingHeaders)
+                .withLastModifiedDate(timestamp)
+                .withStateToken(state)
+                .build();
+
+        session2.writeHeaders(updatedHeaders);
+
+        assertEquals(updatedHeaders, session2.readHeaders(resourceId));
+
+        session2.commit();
+
+        assertEquals(updatedHeaders, session2.readHeaders(resourceId));
+    }
+
+    @Test
     public void writeNewAtomicRdfResource() {
         final var resourceId = "info:fedora/foo/bar";
         final var session = sessionFactory.newSession(resourceId);
