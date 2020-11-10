@@ -361,7 +361,7 @@ public class DefaultOcflObjectSessionTest {
 
         final var deleteHeaders = ResourceHeaders.builder(existing.getHeaders())
                 .withContentPath(null)
-                .withContentSize(null)
+                .withContentSize(-1)
                 .withDigests(null)
                 .withDeleted(true)
                 .build();
@@ -500,7 +500,7 @@ public class DefaultOcflObjectSessionTest {
         final var deleteHeaders = ResourceHeaders.builder(ag.getHeaders())
                 .withDeleted(true)
                 .withContentPath(null)
-                .withContentSize(null)
+                .withContentSize(-1)
                 .withDigests(null)
                 .build();
 
@@ -949,7 +949,7 @@ public class DefaultOcflObjectSessionTest {
 
         final var deleteHeaders = ResourceHeaders.builder(binary.getHeaders())
                 .withContentPath(null)
-                .withContentSize(null)
+                .withContentSize(-1)
                 .withDigests(null)
                 .build();
 
@@ -1308,7 +1308,7 @@ public class DefaultOcflObjectSessionTest {
         // Mark the child as deleted
         final var deleteHeaders = ResourceHeaders.builder(binaryChild.getHeaders())
                 .withContentPath(null)
-                .withContentSize(null)
+                .withContentSize(-1)
                 .withDigests(null)
                 .withDeleted(true)
                 .withLastModifiedDate(now)

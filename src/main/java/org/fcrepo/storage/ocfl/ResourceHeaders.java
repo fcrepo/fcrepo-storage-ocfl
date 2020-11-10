@@ -47,7 +47,7 @@ public class ResourceHeaders {
     private final String interactionModel;
     private final String mimeType;
     private final String filename;
-    private final Long contentSize;
+    private final long contentSize;
     private final Collection<URI> digests;
     private final String externalUrl;
     private final String externalHandling;
@@ -95,7 +95,7 @@ public class ResourceHeaders {
                            final String interactionModel,
                            final String mimeType,
                            final String filename,
-                           final Long contentSize,
+                           final long contentSize,
                            final Collection<URI> digests,
                            final String externalUrl,
                            final String externalHandling,
@@ -181,9 +181,11 @@ public class ResourceHeaders {
     }
 
     /**
+     * Content size may be -1 when there is no content or the content's size is unknown
+     *
      * @return the contentSize
      */
-    public Long getContentSize() {
+    public long getContentSize() {
         return contentSize;
     }
 
@@ -343,7 +345,7 @@ public class ResourceHeaders {
         private String interactionModel;
         private String mimeType;
         private String filename;
-        private Long contentSize;
+        private long contentSize = -1;
         private Collection<URI> digests;
         private String externalUrl;
         private String externalHandling;
@@ -411,7 +413,7 @@ public class ResourceHeaders {
             return this;
         }
 
-        public Builder withContentSize(final Long contentSize) {
+        public Builder withContentSize(final long contentSize) {
             this.contentSize = contentSize;
             return this;
         }
