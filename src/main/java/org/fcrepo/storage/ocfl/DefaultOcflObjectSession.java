@@ -177,7 +177,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
                 final var fileSize = fileSize(contentDst);
 
-                if (headers.getContentSize() != null
+                if (headers.getContentSize() != -1
                         && fileSize != headers.getContentSize()) {
                     throw new InvalidContentException(
                             String.format("Resource %s's file size does not match expectation." +
@@ -222,7 +222,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
             final var finalHeaders = ResourceHeaders.builder(headers)
                     .withContentPath(null)
-                    .withContentSize(null)
+                    .withContentSize(-1)
                     .withDigests(null)
                     .build();
 
