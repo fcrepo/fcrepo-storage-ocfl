@@ -198,6 +198,7 @@ public class DefaultOcflObjectSessionTest {
         session2.writeHeaders(updatedHeaders);
 
         assertEquals(updatedHeaders, session2.readHeaders(resourceId));
+        assertEquals(existingHeaders, sessionFactory.newSession(resourceId).readHeaders(resourceId));
 
         session2.commit();
 
