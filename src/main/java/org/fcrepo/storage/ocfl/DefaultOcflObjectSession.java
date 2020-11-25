@@ -462,7 +462,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     @Override
     public synchronized void rollback() {
         if (closed && newVersionNum != null) {
-            if (commitType == CommitType.UNVERSIONED || hadMutableHeadBeforeCommit) {
+            if (hadMutableHeadBeforeCommit) {
                 throw new IllegalStateException(String.format(
                         "Cannot rollback changes to object %s because manual versioning was used on this object.",
                         ocflObjectId));

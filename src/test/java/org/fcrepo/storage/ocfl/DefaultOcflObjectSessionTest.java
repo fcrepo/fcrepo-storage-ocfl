@@ -345,8 +345,8 @@ public class DefaultOcflObjectSessionTest {
         assertResourceContent("test", content, session.readContent(resourceId));
     }
 
-    @Test(expected = IllegalStateException.class)
-    public void throwExceptionOnRollbackWhenAutoVersioningNotUsed() {
+    @Test
+    public void allowRollbackWhenManualVersioningUsedButThereWasNotAnExistingMutableHead() {
         final var resourceId = "info:fedora/foo/bar";
         final var session = sessionFactory.newSession(resourceId);
         session.commitType(CommitType.UNVERSIONED);
@@ -359,6 +359,8 @@ public class DefaultOcflObjectSessionTest {
         assertResourceContent("test", content, session.readContent(resourceId));
 
         session.rollback();
+        
+        expectResourceNotFound(resourceId, session);
     }
 
     @Test(expected = IllegalStateException.class)
