@@ -470,7 +470,9 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
             LOG.info("Rolling back {} version {}", ocflObjectId, newVersionNum);
 
-            if (VersionNum.V1.equals(newVersionNum)) {
+            if (VersionNum.V1.equals(newVersionNum) ||
+                    (VersionNum.fromInt(2).equals(newVersionNum) && ocflRepo.hasStagedChanges(ocflObjectId))) {
+                // Purge the object if it only has one version or if it is a newly created object with a mutable head
                 ocflRepo.purgeObject(ocflObjectId);
             } else {
                 ocflRepo.rollbackToVersion(ObjectVersionId.version(ocflObjectId, newVersionNum.previousVersionNum()));

@@ -359,7 +359,7 @@ public class DefaultOcflObjectSessionTest {
         assertResourceContent("test", content, session.readContent(resourceId));
 
         session.rollback();
-        
+
         expectResourceNotFound(resourceId, session);
     }
 
