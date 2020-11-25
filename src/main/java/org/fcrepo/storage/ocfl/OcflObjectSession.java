@@ -177,6 +177,15 @@ public interface OcflObjectSession extends AutoCloseable {
     void abort();
 
     /**
+     * Rolls back an already committed session, permanently removing the OCFL object version that was created by the
+     * session. Sessions may only be rolled back when auto-versioning in enabled. Calling this method on a session
+     * that has not yet been committed does nothing.
+     *
+     * @throws IllegalStateException if the session cannot be rolled back because manual versioning was used
+     */
+    void rollback();
+
+    /**
      * @return true if the session is still open
      */
     boolean isOpen();
