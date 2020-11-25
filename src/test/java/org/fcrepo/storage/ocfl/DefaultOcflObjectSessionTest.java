@@ -260,6 +260,131 @@ public class DefaultOcflObjectSessionTest {
     }
 
     @Test
+    public void rollbackAllAgChangesWhenAutoVersionedWithMultipleVersions() {
+        final var agId = "info:fedora/foo";
+        final var containerId = "info:fedora/foo/bar";
+        final var binaryId = "info:fedora/foo/bar/baz";
+
+        final var session = sessionFactory.newSession(agId);
+
+        final var agContent = ag(agId, ROOT, "foo");
+        final var containerContent = container(containerId, agId, "bar");
+        final var binaryContent = binary(binaryId, containerId, agId, "baz");
+
+        write(session, agContent);
+        write(session, containerContent);
+        write(session, binaryContent);
+
+        session.commit();
+
+        final var session2 = sessionFactory.newSession(agId);
+
+        final var agContent2 = ag(agId, ROOT, "foo2");
+        final var containerContent2 = container(containerId, agId, "bar2");
+        final var deleteHeaders = ResourceHeaders.builder(binaryContent.getHeaders())
+                .withDeleted(true)
+                .withContentPath(null)
+                .withContentSize(-1)
+                .withDigests(null)
+                .build();
+
+        write(session2, agContent2);
+        write(session2, containerContent2);
+        session2.deleteContentFile(deleteHeaders);
+
+        session2.commit();
+
+        final var correctAg = touch(agContent2, deleteHeaders);
+
+        assertResourceContent("foo2", correctAg, session2.readContent(agId));
+        assertResourceContent("bar2", containerContent2, session2.readContent(containerId));
+        final var deletedBinary = session2.readContent(binaryId);
+        assertEquals(deleteHeaders, deletedBinary.getHeaders());
+        assertFalse(deletedBinary.getContentStream().isPresent());
+
+        session2.rollback();
+
+        final var correctAg2 = touch(agContent, binaryContent);
+
+        assertResourceContent("foo", correctAg2, session2.readContent(agId));
+        assertResourceContent("bar", containerContent, session2.readContent(containerId));
+        assertResourceContent("baz", binaryContent, session2.readContent(binaryId));
+    }
+
+    @Test
+    public void rollbackWhenAutoVersioningEnabledAndFirstVersion() {
+        final var resourceId = "info:fedora/foo/bar";
+        final var session = sessionFactory.newSession(resourceId);
+
+        final var content = atomicContainer(resourceId, "info:fedora/foo", "test");
+
+        write(session, content);
+
+        session.commit();
+
+        assertResourceContent("test", content, session.readContent(resourceId));
+
+        session.rollback();
+
+        expectResourceNotFound(resourceId, session);
+    }
+
+    @Test
+    public void doNothingWhenRollbackOnSessionThatIsNotCommitted() {
+        final var resourceId = "info:fedora/foo/bar";
+        final var session = sessionFactory.newSession(resourceId);
+
+        final var content = atomicContainer(resourceId, "info:fedora/foo", "test");
+
+        write(session, content);
+
+        assertResourceContent("test", content, session.readContent(resourceId));
+
+        session.rollback();
+
+        assertResourceContent("test", content, session.readContent(resourceId));
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void throwExceptionOnRollbackWhenAutoVersioningNotUsed() {
+        final var resourceId = "info:fedora/foo/bar";
+        final var session = sessionFactory.newSession(resourceId);
+        session.commitType(CommitType.UNVERSIONED);
+
+        final var content = atomicContainer(resourceId, "info:fedora/foo", "test");
+
+        write(session, content);
+        session.commit();
+
+        assertResourceContent("test", content, session.readContent(resourceId));
+
+        session.rollback();
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void throwExceptionOnRollbackWhenAutoVersioningUsedOnExistingMutableVersion() {
+        final var resourceId = "info:fedora/foo/bar";
+        final var session = sessionFactory.newSession(resourceId);
+        session.commitType(CommitType.UNVERSIONED);
+
+        final var content = atomicContainer(resourceId, "info:fedora/foo", "test");
+
+        write(session, content);
+        session.commit();
+
+        final var session2 = sessionFactory.newSession(resourceId);
+
+        final var content2 = atomicContainer(resourceId, "info:fedora/foo", "test2");
+
+        write(session2, content2);
+        session2.commit();
+
+        assertResourceContent("test2", content2, session2.readContent(resourceId));
+
+        session2.rollback();
+    }
+
+    @Test
     public void cacheTest() {
         final var agId = "info:fedora/foo";
         final var containerId = "info:fedora/foo/bar";

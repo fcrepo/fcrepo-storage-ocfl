@@ -28,6 +28,7 @@ import edu.wisc.library.ocfl.api.model.FileChangeType;
 import edu.wisc.library.ocfl.api.model.FileDetails;
 import edu.wisc.library.ocfl.api.model.ObjectVersionId;
 import edu.wisc.library.ocfl.api.model.VersionInfo;
+import edu.wisc.library.ocfl.api.model.VersionNum;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.SystemUtils;
@@ -103,6 +104,8 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private boolean isArchivalGroup;
     private boolean closed = false;
     private boolean deleteObject = false;
+    private VersionNum newVersionNum;
+    private boolean hadMutableHeadBeforeCommit;
 
     public DefaultOcflObjectSession(final String sessionId,
                                     final MutableOcflRepository ocflRepo,
@@ -418,9 +421,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
             ocflRepo.purgeObject(ocflObjectId);
         }
 
-        final var hasMutableHead = ocflRepo.hasStagedChanges(ocflObjectId);
-
-        String newVersionNum = null;
+        hadMutableHeadBeforeCommit = ocflRepo.hasStagedChanges(ocflObjectId);
 
         if (!deletePaths.isEmpty() || Files.exists(objectStaging)) {
             deletePathsFromStaging();
@@ -428,23 +429,23 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
             final var updater = createObjectUpdater();
 
             if (commitType == CommitType.UNVERSIONED
-                    || hasMutableHeadAndShouldCreateNewVersion(hasMutableHead)) {
+                    || hasMutableHeadAndShouldCreateNewVersion(hadMutableHeadBeforeCommit)) {
                 // Stage updates to mutable HEAD when auto-versioning disabled, or immediately before committing the
                 // mutable HEAD to a version when auto-versioning is enabled.
                 newVersionNum = ocflRepo.stageChanges(ObjectVersionId.head(ocflObjectId), versionInfo, updater)
-                        .getVersionNum().toString();
+                        .getVersionNum();
             } else {
                 newVersionNum = ocflRepo.updateObject(ObjectVersionId.head(ocflObjectId), versionInfo, updater)
-                        .getVersionNum().toString();
+                        .getVersionNum();
             }
         }
 
-        if (hasMutableHeadAndShouldCreateNewVersion(hasMutableHead)) {
+        if (hasMutableHeadAndShouldCreateNewVersion(hadMutableHeadBeforeCommit)) {
             ocflRepo.commitStagedChanges(ocflObjectId, versionInfo);
         }
 
         if (newVersionNum != null) {
-            moveStagedHeadersToCache(newVersionNum);
+            moveStagedHeadersToCache(newVersionNum.toString());
         }
 
         cleanup();
@@ -455,6 +456,25 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         if (!closed) {
             closed = true;
             cleanup();
+        }
+    }
+
+    @Override
+    public synchronized void rollback() {
+        if (closed && newVersionNum != null) {
+            if (commitType == CommitType.UNVERSIONED || hadMutableHeadBeforeCommit) {
+                throw new IllegalStateException(String.format(
+                        "Cannot rollback changes to object %s because manual versioning was used on this object.",
+                        ocflObjectId));
+            }
+
+            LOG.info("Rolling back {} version {}", ocflObjectId, newVersionNum);
+
+            if (VersionNum.V1.equals(newVersionNum)) {
+                ocflRepo.purgeObject(ocflObjectId);
+            } else {
+                ocflRepo.rollbackToVersion(ObjectVersionId.version(ocflObjectId, newVersionNum.previousVersionNum()));
+            }
         }
     }
 
