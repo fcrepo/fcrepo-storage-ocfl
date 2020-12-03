@@ -43,6 +43,7 @@ public class ResourceHeaders {
 
     private final String id;
     private final String parent;
+    private final String archivalGroupId;
     private final String stateToken;
     private final String interactionModel;
     private final String mimeType;
@@ -71,6 +72,7 @@ public class ResourceHeaders {
     private ResourceHeaders(final Builder builder) {
         this(builder.id,
                 builder.parent,
+                builder.archivalGroupId,
                 builder.stateToken,
                 builder.interactionModel,
                 builder.mimeType,
@@ -91,6 +93,7 @@ public class ResourceHeaders {
 
     private ResourceHeaders(final String id,
                            final String parent,
+                           final String archivalGroupId,
                            final String stateToken,
                            final String interactionModel,
                            final String mimeType,
@@ -109,6 +112,7 @@ public class ResourceHeaders {
                            final String contentPath) {
         this.id = id;
         this.parent = parent;
+        this.archivalGroupId = archivalGroupId;
         this.stateToken = stateToken;
         this.interactionModel = interactionModel;
         this.mimeType = mimeType;
@@ -150,6 +154,13 @@ public class ResourceHeaders {
      */
     public String getParent() {
         return parent;
+    }
+
+    /**
+     * @return the fedora id of the archival group resource that contains this resource, or null
+     */
+    public String getArchivalGroupId() {
+        return archivalGroupId;
     }
 
     /**
@@ -275,6 +286,7 @@ public class ResourceHeaders {
         return "ResourceHeaders{" +
                 "id='" + id + '\'' +
                 ", parent='" + parent + '\'' +
+                ", archivalGroupId='" + archivalGroupId + '\'' +
                 ", stateToken='" + stateToken + '\'' +
                 ", interactionModel='" + interactionModel + '\'' +
                 ", mimeType='" + mimeType + '\'' +
@@ -308,6 +320,7 @@ public class ResourceHeaders {
                 deleted == that.deleted &&
                 Objects.equals(id, that.id) &&
                 Objects.equals(parent, that.parent) &&
+                Objects.equals(archivalGroupId, that.archivalGroupId) &&
                 Objects.equals(stateToken, that.stateToken) &&
                 Objects.equals(interactionModel, that.interactionModel) &&
                 Objects.equals(mimeType, that.mimeType) &&
@@ -325,7 +338,7 @@ public class ResourceHeaders {
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, parent, stateToken,
+        return Objects.hash(id, parent, archivalGroupId, stateToken,
                 interactionModel, mimeType, filename,
                 contentSize, digests, externalUrl,
                 externalHandling, createdDate, createdBy,
@@ -341,6 +354,7 @@ public class ResourceHeaders {
 
         private String id;
         private String parent;
+        private String archivalGroupId;
         private String stateToken;
         private String interactionModel;
         private String mimeType;
@@ -365,6 +379,7 @@ public class ResourceHeaders {
         public Builder(final ResourceHeaders original) {
             this.id = original.getId();
             this.parent = original.getParent();
+            this.archivalGroupId = original.getArchivalGroupId();
             this.stateToken = original.getStateToken();
             this.interactionModel = original.getInteractionModel();
             this.mimeType = original.getMimeType();
@@ -390,6 +405,11 @@ public class ResourceHeaders {
 
         public Builder withParent(final String parent) {
             this.parent = parent;
+            return this;
+        }
+
+        public Builder withArchivalGroupId(final String archivalGroupId) {
+            this.archivalGroupId = archivalGroupId;
             return this;
         }
 

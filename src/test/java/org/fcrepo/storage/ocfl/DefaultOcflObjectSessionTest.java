@@ -235,7 +235,7 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(agId);
 
         final var agContent = ag(agId, ROOT, "foo");
-        final var containerContent = container(containerId, agId, "bar");
+        final var containerContent = container(containerId, agId, agId, "bar");
         final var binaryContent = binary(binaryId, containerId, agId, "baz");
 
         write(session, agContent);
@@ -268,7 +268,7 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(agId);
 
         final var agContent = ag(agId, ROOT, "foo");
-        final var containerContent = container(containerId, agId, "bar");
+        final var containerContent = container(containerId, agId, agId, "bar");
         final var binaryContent = binary(binaryId, containerId, agId, "baz");
 
         write(session, agContent);
@@ -280,7 +280,7 @@ public class DefaultOcflObjectSessionTest {
         final var session2 = sessionFactory.newSession(agId);
 
         final var agContent2 = ag(agId, ROOT, "foo2");
-        final var containerContent2 = container(containerId, agId, "bar2");
+        final var containerContent2 = container(containerId, agId, agId, "bar2");
         final var deleteHeaders = ResourceHeaders.builder(binaryContent.getHeaders())
                 .withDeleted(true)
                 .withContentPath(null)
@@ -395,7 +395,7 @@ public class DefaultOcflObjectSessionTest {
         final var session = cachedSessionFactory.newSession(agId);
 
         final var agContent = ag(agId, ROOT, "foo");
-        final var containerContent = container(containerId, agId, "bar");
+        final var containerContent = container(containerId, agId, agId, "bar");
         final var binaryContent = binary(binaryId, containerId, agId, "baz");
 
         write(session, agContent);
@@ -1380,7 +1380,7 @@ public class DefaultOcflObjectSessionTest {
         session.commitType(CommitType.UNVERSIONED);
 
         final var agContent = ag(agId, ROOT, "foo");
-        final var containerContent = container(containerId, agId, "bar");
+        final var containerContent = container(containerId, agId, agId, "bar");
         final var binaryContent = binary(binaryId, containerId, "baz");
         final var binary2Content = binary(binary2Id, containerId, "boz");
 
@@ -1411,7 +1411,7 @@ public class DefaultOcflObjectSessionTest {
         final var session3 = sessionFactory.newSession(agId);
         session3.commitType(CommitType.UNVERSIONED);
 
-        final var containerContentV2 = container(containerId, agId, "bar - 2");
+        final var containerContentV2 = container(containerId, agId, agId, "bar - 2");
         final var binaryContentV2 = binary(binaryId, containerId, "baz - 2");
 
         write(session3, containerContentV2);
@@ -1429,7 +1429,7 @@ public class DefaultOcflObjectSessionTest {
         final var session4 = sessionFactory.newSession(agId);
         session4.commitType(CommitType.UNVERSIONED);
 
-        final var containerContentV3 = container(containerId, agId, "bar - 3");
+        final var containerContentV3 = container(containerId, agId, agId, "bar - 3");
 
         write(session4, containerContentV3);
 
@@ -1553,6 +1553,7 @@ public class DefaultOcflObjectSessionTest {
         headers.withInteractionModel(InteractionModel.NON_RDF.getUri());
         headers.withMimeType("text/plain");
         headers.withContentPath(PersistencePaths.nonRdfResource(rootResourceId, resourceId).getContentFilePath());
+        headers.withArchivalGroupId(rootResourceId);
         return new ResourceContent(stream(content), headers.build());
     }
 
@@ -1566,13 +1567,17 @@ public class DefaultOcflObjectSessionTest {
         return new ResourceContent(stream(content), headers.build());
     }
 
-    private ResourceContent container(final String resourceId, final String parentId, final String content) {
+    private ResourceContent container(final String resourceId,
+                                      final String parentId,
+                                      final String rootResourceId,
+                                      final String content) {
         final var headers = defaultHeaders(resourceId, parentId, content);
         headers.withObjectRoot(false);
         headers.withArchivalGroup(false);
         headers.withInteractionModel(InteractionModel.BASIC_CONTAINER.getUri());
         headers.withMimeType("text/turtle");
         headers.withContentPath(PersistencePaths.rdfResource(parentId, resourceId).getContentFilePath());
+        headers.withArchivalGroupId(rootResourceId);
         return new ResourceContent(stream(content), headers.build());
     }
 
