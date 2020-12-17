@@ -12,7 +12,7 @@
 
   <properties>
     <compiler.plugin.version>3.8.0</compiler.plugin.version>
-    <fcrepo-build-tools.version>6.0.0-SNAPSHOT</fcrepo-build-tools.version>
+    <fcrepo-build-tools.version>6.0.0-alpha-1</fcrepo-build-tools.version>
     <gpg.plugin.version>1.6</gpg.plugin.version> <jackson.version>2.11.1</jackson.version>
     <license.plugin.version>3.0</license.plugin.version>
     <project.java.source>11</project.java.source>
