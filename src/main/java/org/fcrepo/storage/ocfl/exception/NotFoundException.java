@@ -16,28 +16,27 @@
  * limitations under the License.
  */
 
-package org.fcrepo.storage.ocfl;
+package org.fcrepo.storage.ocfl.exception;
 
 /**
- * Indicates that the content provided for a resource was invalid. For example, the expected and actual content sizes
- * did not match
+ * Indicates that a resource could not be found in the underlying storage
  *
  * @author pwinckles
  */
-public class InvalidContentException extends RuntimeException {
+public class NotFoundException extends RuntimeException {
 
-    public InvalidContentException() {
+    public NotFoundException() {
     }
 
-    public InvalidContentException(final String message) {
+    public NotFoundException(final String message) {
         super(message);
     }
 
-    public InvalidContentException(final String message, final Throwable cause) {
+    public NotFoundException(final String message, final Throwable cause) {
         super(message, cause);
     }
 
-    public InvalidContentException(final Throwable cause) {
+    public NotFoundException(final Throwable cause) {
         super(cause);
     }
 
