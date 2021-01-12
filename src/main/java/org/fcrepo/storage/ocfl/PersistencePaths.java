@@ -30,7 +30,7 @@ import org.apache.commons.lang3.StringUtils;
 public final class PersistencePaths {
 
     public static final String FCR_METADATA = "fcr:metadata";
-    private static final String FCR_ACL = "fcr:acl";
+    public static final String FCR_ACL = "fcr:acl";
 
     private static final String HEADER_DIR = ".fcrepo/";
     private static final String ROOT_PREFIX = "fcr-root";

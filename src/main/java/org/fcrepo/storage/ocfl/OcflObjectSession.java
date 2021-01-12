@@ -18,6 +18,9 @@
 
 package org.fcrepo.storage.ocfl;
 
+import org.fcrepo.storage.ocfl.exception.InvalidContentException;
+import org.fcrepo.storage.ocfl.exception.NotFoundException;
+
 import java.io.InputStream;
 import java.time.OffsetDateTime;
 import java.util.List;

@@ -30,22 +30,21 @@ import edu.wisc.library.ocfl.core.OcflRepositoryBuilder;
 import edu.wisc.library.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig;
 import edu.wisc.library.ocfl.core.path.mapper.LogicalPathMappers;
 import edu.wisc.library.ocfl.core.storage.filesystem.FileSystemOcflStorage;
-import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.fcrepo.storage.ocfl.cache.CaffeineCache;
 import org.fcrepo.storage.ocfl.cache.NoOpCache;
+import org.fcrepo.storage.ocfl.exception.InvalidContentException;
+import org.fcrepo.storage.ocfl.exception.NotFoundException;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -55,7 +54,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
@@ -135,7 +133,7 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(resourceId);
 
         final var contentStr = "Test";
-        final var content = atomicBinary(resourceId, "info:fedora/foo", contentStr);
+        final var content = ResourceUtils.atomicBinary(resourceId, "info:fedora/foo", contentStr);
 
         write(session, content);
 
@@ -155,14 +153,14 @@ public class DefaultOcflObjectSessionTest {
         final var resourceId = "info:fedora/foo/bar";
 
         final var session1 = sessionFactory.newSession(resourceId);
-        final var content1 = atomicBinary(resourceId, "info:fedora/foo", "Test");
+        final var content1 = ResourceUtils.atomicBinary(resourceId, "info:fedora/foo", "Test");
 
         write(session1, content1);
         session1.commit();
 
         final var session2 = sessionFactory.newSession(resourceId);
         final var contentStr2 = "Updated!";
-        final var content2 = atomicBinary(resourceId, "info:fedora/foo", contentStr2);
+        final var content2 = ResourceUtils.atomicBinary(resourceId, "info:fedora/foo", contentStr2);
 
         write(session2, content2);
         session2.commit();
@@ -179,7 +177,7 @@ public class DefaultOcflObjectSessionTest {
         final var resourceId = "info:fedora/foo/bar";
 
         final var session1 = sessionFactory.newSession(resourceId);
-        final var content1 = atomicBinary(resourceId, "info:fedora/foo", "Test");
+        final var content1 = ResourceUtils.atomicBinary(resourceId, "info:fedora/foo", "Test");
 
         write(session1, content1);
         session1.commit();
@@ -211,7 +209,7 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(resourceId);
 
         final var contentStr = "Test";
-        final var content = atomicContainer(resourceId, "info:fedora/foo", contentStr);
+        final var content = ResourceUtils.atomicContainer(resourceId, "info:fedora/foo", contentStr);
 
         write(session, content);
 
@@ -234,9 +232,9 @@ public class DefaultOcflObjectSessionTest {
 
         final var session = sessionFactory.newSession(agId);
 
-        final var agContent = ag(agId, ROOT, "foo");
-        final var containerContent = container(containerId, agId, agId, "bar");
-        final var binaryContent = binary(binaryId, containerId, agId, "baz");
+        final var agContent = ResourceUtils.ag(agId, ROOT, "foo");
+        final var containerContent = ResourceUtils.partContainer(containerId, agId, agId, "bar");
+        final var binaryContent = ResourceUtils.partBinary(binaryId, containerId, agId, "baz");
 
         write(session, agContent);
         write(session, containerContent);
@@ -267,9 +265,9 @@ public class DefaultOcflObjectSessionTest {
 
         final var session = sessionFactory.newSession(agId);
 
-        final var agContent = ag(agId, ROOT, "foo");
-        final var containerContent = container(containerId, agId, agId, "bar");
-        final var binaryContent = binary(binaryId, containerId, agId, "baz");
+        final var agContent = ResourceUtils.ag(agId, ROOT, "foo");
+        final var containerContent = ResourceUtils.partContainer(containerId, agId, agId, "bar");
+        final var binaryContent = ResourceUtils.partBinary(binaryId, containerId, agId, "baz");
 
         write(session, agContent);
         write(session, containerContent);
@@ -279,8 +277,8 @@ public class DefaultOcflObjectSessionTest {
 
         final var session2 = sessionFactory.newSession(agId);
 
-        final var agContent2 = ag(agId, ROOT, "foo2");
-        final var containerContent2 = container(containerId, agId, agId, "bar2");
+        final var agContent2 = ResourceUtils.ag(agId, ROOT, "foo2");
+        final var containerContent2 = ResourceUtils.partContainer(containerId, agId, agId, "bar2");
         final var deleteHeaders = ResourceHeaders.builder(binaryContent.getHeaders())
                 .withDeleted(true)
                 .withContentPath(null)
@@ -316,7 +314,7 @@ public class DefaultOcflObjectSessionTest {
         final var resourceId = "info:fedora/foo/bar";
         final var session = sessionFactory.newSession(resourceId);
 
-        final var content = atomicContainer(resourceId, "info:fedora/foo", "test");
+        final var content = ResourceUtils.atomicContainer(resourceId, "info:fedora/foo", "test");
 
         write(session, content);
 
@@ -334,7 +332,7 @@ public class DefaultOcflObjectSessionTest {
         final var resourceId = "info:fedora/foo/bar";
         final var session = sessionFactory.newSession(resourceId);
 
-        final var content = atomicContainer(resourceId, "info:fedora/foo", "test");
+        final var content = ResourceUtils.atomicContainer(resourceId, "info:fedora/foo", "test");
 
         write(session, content);
 
@@ -351,7 +349,7 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(resourceId);
         session.commitType(CommitType.UNVERSIONED);
 
-        final var content = atomicContainer(resourceId, "info:fedora/foo", "test");
+        final var content = ResourceUtils.atomicContainer(resourceId, "info:fedora/foo", "test");
 
         write(session, content);
         session.commit();
@@ -369,14 +367,14 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(resourceId);
         session.commitType(CommitType.UNVERSIONED);
 
-        final var content = atomicContainer(resourceId, "info:fedora/foo", "test");
+        final var content = ResourceUtils.atomicContainer(resourceId, "info:fedora/foo", "test");
 
         write(session, content);
         session.commit();
 
         final var session2 = sessionFactory.newSession(resourceId);
 
-        final var content2 = atomicContainer(resourceId, "info:fedora/foo", "test2");
+        final var content2 = ResourceUtils.atomicContainer(resourceId, "info:fedora/foo", "test2");
 
         write(session2, content2);
         session2.commit();
@@ -394,9 +392,9 @@ public class DefaultOcflObjectSessionTest {
 
         final var session = cachedSessionFactory.newSession(agId);
 
-        final var agContent = ag(agId, ROOT, "foo");
-        final var containerContent = container(containerId, agId, agId, "bar");
-        final var binaryContent = binary(binaryId, containerId, agId, "baz");
+        final var agContent = ResourceUtils.ag(agId, ROOT, "foo");
+        final var containerContent = ResourceUtils.partContainer(containerId, agId, agId, "bar");
+        final var binaryContent = ResourceUtils.partBinary(binaryId, containerId, agId, "baz");
 
         write(session, agContent);
         write(session, containerContent);
@@ -432,8 +430,8 @@ public class DefaultOcflObjectSessionTest {
 
         final var session = sessionFactory.newSession(resourceId);
 
-        final var content = atomicBinary(resourceId, "info:fedora/foo", "blah");
-        final var acl = acl(false, aclId, resourceId, "acl");
+        final var content = ResourceUtils.atomicBinary(resourceId, "info:fedora/foo", "blah");
+        final var acl = ResourceUtils.atomicBinaryAcl(aclId, resourceId, "acl");
 
         write(session, content);
         write(session, acl);
@@ -452,8 +450,8 @@ public class DefaultOcflObjectSessionTest {
 
         final var session = sessionFactory.newSession(resourceId);
 
-        final var content = atomicContainer(resourceId, "info:fedora/foo", "blah");
-        final var acl = acl(true, aclId, resourceId, "acl");
+        final var content = ResourceUtils.atomicContainer(resourceId, "info:fedora/foo", "blah");
+        final var acl = ResourceUtils.atomicContainerAcl(aclId, resourceId, "acl");
 
         write(session, content);
         write(session, acl);
@@ -472,8 +470,8 @@ public class DefaultOcflObjectSessionTest {
 
         final var session = sessionFactory.newSession(resourceId);
 
-        final var content = atomicBinary(resourceId, "info:fedora/foo", "blah");
-        final var desc = desc(descId, resourceId, "desc");
+        final var content = ResourceUtils.atomicBinary(resourceId, "info:fedora/foo", "blah");
+        final var desc = ResourceUtils.atomicDesc(descId, resourceId, "desc");
 
         write(session, content);
         write(session, desc);
@@ -497,7 +495,7 @@ public class DefaultOcflObjectSessionTest {
         final var resourceId = "info:fedora/foo/bar";
         final var session = sessionFactory.newSession(resourceId);
 
-        write(session, atomicBinary(resourceId, "info:fedora/foo", "blah"));
+        write(session, ResourceUtils.atomicBinary(resourceId, "info:fedora/foo", "blah"));
         session.commit();
 
         session.readContent(resourceId + "/baz");
@@ -553,8 +551,8 @@ public class DefaultOcflObjectSessionTest {
     public void deleteFileThatHasNotBeenCommitted() {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        final var ag = ag(DEFAULT_AG_ID, ROOT, "ag");
-        final var binary = binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "binary");
+        final var ag = ResourceUtils.ag(DEFAULT_AG_ID, ROOT, "ag");
+        final var binary = ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "binary");
 
         write(session, ag);
         write(session, binary);
@@ -574,9 +572,9 @@ public class DefaultOcflObjectSessionTest {
     public void deleteFileAndThenReAddBeforeCommitting() {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        final var ag = ag(DEFAULT_AG_ID, ROOT, "ag");
-        final var binary = binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "binary");
-        final var binary2 = binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "binary2");
+        final var ag = ResourceUtils.ag(DEFAULT_AG_ID, ROOT, "ag");
+        final var binary = ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "binary");
+        final var binary2 = ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "binary2");
         final var correctAg = touch(ag, binary2);
 
         write(session, ag);
@@ -613,8 +611,8 @@ public class DefaultOcflObjectSessionTest {
     public void deleteObjectWhenNotCommitted() {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        final var ag = ag(DEFAULT_AG_ID, ROOT, "ag");
-        final var binary = binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "binary");
+        final var ag = ResourceUtils.ag(DEFAULT_AG_ID, ROOT, "ag");
+        final var binary = ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "binary");
 
         write(session, ag);
         write(session, binary);
@@ -638,7 +636,7 @@ public class DefaultOcflObjectSessionTest {
 
         session.deleteResource(DEFAULT_AG_ID);
 
-        final var ag2 = ag(DEFAULT_AG_ID, ROOT, "ag2");
+        final var ag2 = ResourceUtils.ag(DEFAULT_AG_ID, ROOT, "ag2");
 
         write(session, ag2);
 
@@ -675,7 +673,7 @@ public class DefaultOcflObjectSessionTest {
     public void setOcflVersionInfo() {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        final var ag = ag(DEFAULT_AG_ID, ROOT, "ag");
+        final var ag = ResourceUtils.ag(DEFAULT_AG_ID, ROOT, "ag");
 
         write(session, ag);
 
@@ -701,7 +699,7 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void abortStagedChanges() {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-        final var ag = ag(DEFAULT_AG_ID, ROOT, "ag");
+        final var ag = ResourceUtils.ag(DEFAULT_AG_ID, ROOT, "ag");
         write(session, ag);
 
         session.abort();
@@ -712,7 +710,7 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void failWriteAfterSessionClosed() {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-        final var ag = ag(DEFAULT_AG_ID, ROOT, "ag");
+        final var ag = ResourceUtils.ag(DEFAULT_AG_ID, ROOT, "ag");
         write(session, ag);
 
         session.commit();
@@ -728,7 +726,7 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void failCommitAfterSessionClosed() {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-        final var ag = ag(DEFAULT_AG_ID, ROOT, "ag");
+        final var ag = ResourceUtils.ag(DEFAULT_AG_ID, ROOT, "ag");
         write(session, ag);
 
         session.commit();
@@ -746,7 +744,7 @@ public class DefaultOcflObjectSessionTest {
         final var resourceId = "info:fedora/foo:bar";
         final var session = sessionFactory.newSession(resourceId);
 
-        final var content = atomicBinary(resourceId, ROOT, "stuff");
+        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "stuff");
 
         write(session, content);
 
@@ -780,7 +778,7 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(resourceId);
 
         final var contentStr = "Test";
-        final var content = atomicContainer(resourceId, "info:fedora/foo", contentStr);
+        final var content = ResourceUtils.atomicContainer(resourceId, "info:fedora/foo", contentStr);
 
         write(session, content);
 
@@ -799,7 +797,7 @@ public class DefaultOcflObjectSessionTest {
         session2.deleteResource(resourceId);
 
         final var contentStr2 = "Test more";
-        final var content2 = atomicContainer(resourceId, "info:fedora/foo", contentStr2);
+        final var content2 = ResourceUtils.atomicContainer(resourceId, "info:fedora/foo", contentStr2);
 
         write(session2, content2);
 
@@ -818,7 +816,7 @@ public class DefaultOcflObjectSessionTest {
         final var resourceId = "info:fedora/foo";
         final var session = sessionFactory.newSession(resourceId);
 
-        final var content = atomicBinary(resourceId, ROOT, null);
+        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, null);
 
         write(session, content);
 
@@ -838,18 +836,18 @@ public class DefaultOcflObjectSessionTest {
 
         final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        write(session1, ag(DEFAULT_AG_ID, ROOT, "ag"));
-        write(session1, binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "binary"));
+        write(session1, ResourceUtils.ag(DEFAULT_AG_ID, ROOT, "ag"));
+        write(session1, ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "binary"));
         session1.commit();
 
         final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        write(session2, binary(binary2Id, DEFAULT_AG_ID, "binary2"));
+        write(session2, ResourceUtils.partBinary(binary2Id, DEFAULT_AG_ID, DEFAULT_AG_ID, "binary2"));
         session2.commit();
 
         final var session3 = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        write(session3, binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "updated"));
+        write(session3, ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "updated"));
         session3.commit();
 
         assertVersions(session3.listVersions(DEFAULT_AG_ID), "v1", "v2", "v3");
@@ -875,7 +873,7 @@ public class DefaultOcflObjectSessionTest {
         close(defaultAg());
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        write(session, binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "test"));
+        write(session, ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "test"));
 
         assertEquals(0, session.listVersions(DEFAULT_AG_BINARY_ID).size());
     }
@@ -886,7 +884,7 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
         session.commitType(CommitType.UNVERSIONED);
 
-        write(session, binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "test"));
+        write(session, ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "test"));
         session.commit();
 
         assertEquals(0, session.listVersions(DEFAULT_AG_BINARY_ID).size());
@@ -897,9 +895,9 @@ public class DefaultOcflObjectSessionTest {
     public void readPreviousVersion() {
         final var resourceId = "info:fedora/foo";
 
-        final var first = atomicBinary(resourceId, ROOT, "first");
-        final var second = atomicBinary(resourceId, ROOT, "second");
-        final var third = atomicBinary(resourceId, ROOT, "third");
+        final var first = ResourceUtils.atomicBinary(resourceId, ROOT, "first");
+        final var second = ResourceUtils.atomicBinary(resourceId, ROOT, "second");
+        final var third = ResourceUtils.atomicBinary(resourceId, ROOT, "third");
 
         final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
         write(session1, first);
@@ -928,7 +926,7 @@ public class DefaultOcflObjectSessionTest {
     @Test(expected = FixityCheckException.class)
     public void failWhenProvidedDigestDoesNotMatchComputed() throws URISyntaxException {
         final var resourceId = "info:fedora/foo";
-        final var content = atomicBinary(resourceId, ROOT, "bar", headers -> {
+        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "bar", headers -> {
             headers.withDigests(List.of(
                     URI.create("urn:sha-512:dc6b68d13b8cf959644b935f1192b02c71aa7a5cf653bd43b4480fa89eec8d4d3f16a" +
                             "2278ec8c3b40ab1fdb233b3173a78fd83590d6f739e0c9e8ff56c282557")));
@@ -951,7 +949,7 @@ public class DefaultOcflObjectSessionTest {
         final var digests = new ArrayList<URI>();
         digests.add(new URI("urn:sha-256:" + sha256Digest));
 
-        final var content = atomicBinary(resourceId, ROOT, "bar", headers -> {
+        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "bar", headers -> {
             headers.withDigests(digests);
         });
 
@@ -971,7 +969,7 @@ public class DefaultOcflObjectSessionTest {
     public void commitToMutableHeadWhenNewObject() {
         final var resourceId = "info:fedora/foo";
 
-        final var content1 = atomicBinary(resourceId, ROOT, "first");
+        final var content1 = ResourceUtils.atomicBinary(resourceId, ROOT, "first");
         final var session1 = sessionFactory.newSession(resourceId);
         session1.commitType(CommitType.UNVERSIONED);
 
@@ -980,7 +978,7 @@ public class DefaultOcflObjectSessionTest {
 
         assertResourceContent("first", content1, session1.readContent(resourceId));
 
-        final var content2 = atomicBinary(resourceId, ROOT, "second");
+        final var content2 = ResourceUtils.atomicBinary(resourceId, ROOT, "second");
         final var session2 = sessionFactory.newSession(resourceId);
         session2.commitType(CommitType.UNVERSIONED);
 
@@ -996,7 +994,7 @@ public class DefaultOcflObjectSessionTest {
     public void commitToMutableHeadWhenHasExistingVersion() {
         final var resourceId = "info:fedora/foo";
 
-        final var content1 = atomicBinary(resourceId, ROOT, "first");
+        final var content1 = ResourceUtils.atomicBinary(resourceId, ROOT, "first");
         final var session1 = sessionFactory.newSession(resourceId);
 
         write(session1, content1);
@@ -1004,7 +1002,7 @@ public class DefaultOcflObjectSessionTest {
 
         assertResourceContent("first", content1, session1.readContent(resourceId));
 
-        final var content2 = atomicBinary(resourceId, ROOT, "second");
+        final var content2 = ResourceUtils.atomicBinary(resourceId, ROOT, "second");
         final var session2 = sessionFactory.newSession(resourceId);
         session2.commitType(CommitType.UNVERSIONED);
 
@@ -1022,7 +1020,7 @@ public class DefaultOcflObjectSessionTest {
     public void commitNewVersionWhenHasStagedChanges() {
         final var resourceId = "info:fedora/foo";
 
-        final var content1 = atomicBinary(resourceId, ROOT, "first");
+        final var content1 = ResourceUtils.atomicBinary(resourceId, ROOT, "first");
         final var session1 = sessionFactory.newSession(resourceId);
         session1.commitType(CommitType.UNVERSIONED);
 
@@ -1031,7 +1029,7 @@ public class DefaultOcflObjectSessionTest {
 
         assertResourceContent("first", content1, session1.readContent(resourceId));
 
-        final var content2 = atomicBinary(resourceId, ROOT, "second");
+        final var content2 = ResourceUtils.atomicBinary(resourceId, ROOT, "second");
         final var session2 = sessionFactory.newSession(resourceId);
 
         write(session2, content2);
@@ -1079,7 +1077,7 @@ public class DefaultOcflObjectSessionTest {
         close(ag);
         close(binary);
 
-        final var binaryUpdate = binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "updated!");
+        final var binaryUpdate = ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "updated!");
 
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
         write(session, binaryUpdate);
@@ -1149,7 +1147,7 @@ public class DefaultOcflObjectSessionTest {
     public void containsResourceWhenExistsInStaging() {
         final var resourceId = "info:fedora/foo";
 
-        final var content = atomicBinary(resourceId, ROOT, "first");
+        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "first");
         final var session = sessionFactory.newSession(resourceId);
 
         write(session, content);
@@ -1161,7 +1159,7 @@ public class DefaultOcflObjectSessionTest {
     public void containsResourceWhenContentDeleted() {
         final var resourceId = "info:fedora/foo";
 
-        final var content = atomicBinary(resourceId, ROOT, "first");
+        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "first");
         final var session = sessionFactory.newSession(resourceId);
 
         write(session, content);
@@ -1178,7 +1176,7 @@ public class DefaultOcflObjectSessionTest {
     public void notContainsResourceWhenPendingDelete() {
         final var resourceId = "info:fedora/foo";
 
-        final var content = atomicBinary(resourceId, ROOT, "first");
+        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "first");
         final var session = sessionFactory.newSession(resourceId);
 
         write(session, content);
@@ -1209,9 +1207,9 @@ public class DefaultOcflObjectSessionTest {
     public void readPreviousVersionWhenHasChangesPending() {
         final var resourceId = "info:fedora/foo";
 
-        final var first = atomicBinary(resourceId, ROOT, "first");
-        final var second = atomicBinary(resourceId, ROOT, "second");
-        final var third = atomicBinary(resourceId, ROOT, "third");
+        final var first = ResourceUtils.atomicBinary(resourceId, ROOT, "first");
+        final var second = ResourceUtils.atomicBinary(resourceId, ROOT, "second");
+        final var third = ResourceUtils.atomicBinary(resourceId, ROOT, "third");
 
         final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
         write(session1, first);
@@ -1249,7 +1247,7 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
         assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
 
-        final var binary = binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "bar");
+        final var binary = ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "bar");
         final var timestamp = binary.getHeaders().getLastModifiedDate();
 
         TimeUnit.SECONDS.sleep(1);
@@ -1270,7 +1268,7 @@ public class DefaultOcflObjectSessionTest {
         assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
 
         final var resourceId = DEFAULT_AG_ID + "/fcr:acl";
-        final var content = acl(true, resourceId, DEFAULT_AG_ID, "blah");
+        final var content = ResourceUtils.atomicContainerAcl(resourceId, DEFAULT_AG_ID, "blah");
 
         write(session, content);
         session.commit();
@@ -1282,10 +1280,10 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void touchBinaryWhenDescUpdated() {
         final var resourceId = "info:fedora/foo";
-        final var content = atomicBinary(resourceId, ROOT, "foo");
+        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "foo");
 
         final var descId = "info:fedora/foo/fcr:metadata";
-        final var descContent = desc(descId, resourceId, "desc");
+        final var descContent = ResourceUtils.atomicDesc(descId, resourceId, "desc");
 
         final var session = sessionFactory.newSession(resourceId);
 
@@ -1297,7 +1295,7 @@ public class DefaultOcflObjectSessionTest {
         assertVersions(session.listVersions(descId), "v1");
 
         final var session2 = sessionFactory.newSession(resourceId);
-        final var descContent2 = desc(descId, resourceId, "desc2");
+        final var descContent2 = ResourceUtils.atomicDesc(descId, resourceId, "desc2");
 
         write(session2, descContent2);
         session2.commit();
@@ -1309,10 +1307,10 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void touchBinaryDescWhenBinaryUpdated() {
         final var resourceId = "info:fedora/foo";
-        final var content = atomicBinary(resourceId, ROOT, "foo");
+        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "foo");
 
         final var descId = "info:fedora/foo/fcr:metadata";
-        final var descContent = desc(descId, resourceId, "desc");
+        final var descContent = ResourceUtils.atomicDesc(descId, resourceId, "desc");
 
         final var session = sessionFactory.newSession(resourceId);
 
@@ -1324,7 +1322,7 @@ public class DefaultOcflObjectSessionTest {
         assertVersions(session.listVersions(descId), "v1");
 
         final var session2 = sessionFactory.newSession(resourceId);
-        final var content2 = atomicBinary(resourceId, ROOT, "bar");
+        final var content2 = ResourceUtils.atomicBinary(resourceId, ROOT, "bar");
 
         write(session2, content2);
         session2.commit();
@@ -1336,7 +1334,7 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void failWriteWhenContentSizeDoesNotMatch() {
         final var resourceId = "info:fedora/foo";
-        final var content = atomicBinary(resourceId, ROOT, "first", headers -> {
+        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "first", headers -> {
             headers.withContentSize(1024L);
         });
 
@@ -1353,7 +1351,7 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void contentWriteFailuresShouldCleanupStagedFiles() throws IOException {
         final var resourceId = "info:fedora/foo";
-        final var content = atomicBinary(resourceId, ROOT, "first", headers -> {
+        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "first", headers -> {
             headers.withContentSize(1024L);
         });
 
@@ -1379,10 +1377,10 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(agId);
         session.commitType(CommitType.UNVERSIONED);
 
-        final var agContent = ag(agId, ROOT, "foo");
-        final var containerContent = container(containerId, agId, agId, "bar");
-        final var binaryContent = binary(binaryId, containerId, "baz");
-        final var binary2Content = binary(binary2Id, containerId, "boz");
+        final var agContent = ResourceUtils.ag(agId, ROOT, "foo");
+        final var containerContent = ResourceUtils.partContainer(containerId, agId, agId, "bar");
+        final var binaryContent = ResourceUtils.partBinary(binaryId, containerId, agId, "baz");
+        final var binary2Content = ResourceUtils.partBinary(binary2Id, containerId, agId, "boz");
 
         write(session, agContent);
         write(session, containerContent);
@@ -1411,8 +1409,8 @@ public class DefaultOcflObjectSessionTest {
         final var session3 = sessionFactory.newSession(agId);
         session3.commitType(CommitType.UNVERSIONED);
 
-        final var containerContentV2 = container(containerId, agId, agId, "bar - 2");
-        final var binaryContentV2 = binary(binaryId, containerId, "baz - 2");
+        final var containerContentV2 = ResourceUtils.partContainer(containerId, agId, agId, "bar - 2");
+        final var binaryContentV2 = ResourceUtils.partBinary(binaryId, containerId, agId, "baz - 2");
 
         write(session3, containerContentV2);
         write(session3, binaryContentV2);
@@ -1429,7 +1427,7 @@ public class DefaultOcflObjectSessionTest {
         final var session4 = sessionFactory.newSession(agId);
         session4.commitType(CommitType.UNVERSIONED);
 
-        final var containerContentV3 = container(containerId, agId, agId, "bar - 3");
+        final var containerContentV3 = ResourceUtils.partContainer(containerId, agId, agId, "bar - 3");
 
         write(session4, containerContentV3);
 
@@ -1470,7 +1468,7 @@ public class DefaultOcflObjectSessionTest {
                 .withDigests(null)
                 .withDeleted(true)
                 .withLastModifiedDate(now)
-                .withStateToken(getStateToken(now))
+                .withStateToken(ResourceUtils.getStateToken(now))
                 .build();
         session.deleteContentFile(deleteHeaders);
 
@@ -1502,146 +1500,16 @@ public class DefaultOcflObjectSessionTest {
 
     private ResourceContent defaultAg() {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-        write(session, ag(DEFAULT_AG_ID, ROOT, "ag"));
+        write(session, ResourceUtils.ag(DEFAULT_AG_ID, ROOT, "ag"));
         session.commit();
         return session.readContent(DEFAULT_AG_ID);
     }
 
     private ResourceContent defaultAgBinary() {
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-        write(session, binary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, "bar"));
+        write(session, ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "bar"));
         session.commit();
         return session.readContent(DEFAULT_AG_BINARY_ID);
-    }
-
-    private ResourceContent atomicBinary(final String resourceId,
-                                         final String parentId,
-                                         final String content,
-                                         final Consumer<ResourceHeaders.Builder> modifyHeaders) {
-        final var headers = defaultHeaders(resourceId, parentId, content);
-        headers.withObjectRoot(true);
-        headers.withArchivalGroup(false);
-        headers.withInteractionModel(InteractionModel.NON_RDF.getUri());
-        headers.withMimeType("text/plain");
-
-        if (content != null) {
-            headers.withContentPath(PersistencePaths.nonRdfResource(resourceId, resourceId).getContentFilePath());
-        }
-
-        if (modifyHeaders != null) {
-            modifyHeaders.accept(headers);
-        }
-
-        return new ResourceContent(stream(content), headers.build());
-    }
-
-    private ResourceContent atomicBinary(final String resourceId, final String parentId, final String content) {
-        return atomicBinary(resourceId, parentId, content, null);
-    }
-
-    private ResourceContent binary(final String resourceId, final String parentId, final String content) {
-        return binary(resourceId, parentId, parentId, content);
-    }
-
-    private ResourceContent binary(final String resourceId,
-                                   final String parentId,
-                                   final String rootResourceId,
-                                   final String content) {
-        final var headers = defaultHeaders(resourceId, parentId, content);
-        headers.withObjectRoot(false);
-        headers.withArchivalGroup(false);
-        headers.withInteractionModel(InteractionModel.NON_RDF.getUri());
-        headers.withMimeType("text/plain");
-        headers.withContentPath(PersistencePaths.nonRdfResource(rootResourceId, resourceId).getContentFilePath());
-        headers.withArchivalGroupId(rootResourceId);
-        return new ResourceContent(stream(content), headers.build());
-    }
-
-    private ResourceContent atomicContainer(final String resourceId, final String parentId, final String content) {
-        final var headers = defaultHeaders(resourceId, parentId, content);
-        headers.withObjectRoot(true);
-        headers.withArchivalGroup(false);
-        headers.withInteractionModel(InteractionModel.BASIC_CONTAINER.getUri());
-        headers.withMimeType("text/turtle");
-        headers.withContentPath(PersistencePaths.rdfResource(resourceId, resourceId).getContentFilePath());
-        return new ResourceContent(stream(content), headers.build());
-    }
-
-    private ResourceContent container(final String resourceId,
-                                      final String parentId,
-                                      final String rootResourceId,
-                                      final String content) {
-        final var headers = defaultHeaders(resourceId, parentId, content);
-        headers.withObjectRoot(false);
-        headers.withArchivalGroup(false);
-        headers.withInteractionModel(InteractionModel.BASIC_CONTAINER.getUri());
-        headers.withMimeType("text/turtle");
-        headers.withContentPath(PersistencePaths.rdfResource(parentId, resourceId).getContentFilePath());
-        headers.withArchivalGroupId(rootResourceId);
-        return new ResourceContent(stream(content), headers.build());
-    }
-
-    private ResourceContent ag(final String resourceId, final String parentId, final String content) {
-        final var headers = defaultHeaders(resourceId, parentId, content);
-        headers.withObjectRoot(true);
-        headers.withArchivalGroup(true);
-        headers.withInteractionModel(InteractionModel.BASIC_CONTAINER.getUri());
-        headers.withMimeType("text/turtle");
-        headers.withContentPath(PersistencePaths.rdfResource(resourceId, resourceId).getContentFilePath());
-        return new ResourceContent(stream(content), headers.build());
-    }
-
-    private ResourceContent acl(final boolean describesRdf,
-                                final String resourceId,
-                                final String parentId,
-                                final String content) {
-        final var headers = defaultHeaders(resourceId, parentId, content);
-        headers.withObjectRoot(false);
-        headers.withArchivalGroup(false);
-        headers.withInteractionModel(InteractionModel.ACL.getUri());
-        headers.withMimeType("text/turtle");
-        headers.withContentPath(PersistencePaths.aclResource(describesRdf, parentId, resourceId).getContentFilePath());
-        return new ResourceContent(stream(content), headers.build());
-    }
-
-    private ResourceContent desc(final String resourceId, final String parentId, final String content) {
-        final var headers = defaultHeaders(resourceId, parentId, content);
-        headers.withObjectRoot(false);
-        headers.withArchivalGroup(false);
-        headers.withInteractionModel(InteractionModel.NON_RDF_DESCRIPTION.getUri());
-        headers.withMimeType("text/turtle");
-        headers.withContentPath(PersistencePaths.rdfResource(parentId, resourceId).getContentFilePath());
-        return new ResourceContent(stream(content), headers.build());
-    }
-
-    private ResourceHeaders.Builder defaultHeaders(final String resourceId,
-                                                   final String parentId,
-                                                   final String content) {
-        final var headers = ResourceHeaders.builder();
-        headers.withId(resourceId);
-        headers.withParent(parentId);
-        headers.withCreatedBy(DEFAULT_USER);
-        headers.withCreatedDate(Instant.now());
-        headers.withLastModifiedBy(DEFAULT_USER);
-        final Instant now = Instant.now();
-        headers.withLastModifiedDate(now);
-        headers.withStateToken(getStateToken(now));
-        if (content != null) {
-            headers.withContentSize((long) content.length());
-            headers.addDigest(URI.create("urn:sha-512:" + DigestUtils.sha512Hex(content)));
-        }
-        return headers;
-    }
-
-    private String getStateToken(final Instant timestamp) {
-        return DigestUtils.md5Hex(String.valueOf(timestamp.toEpochMilli())).toUpperCase();
-    }
-
-    private InputStream stream(final String value) {
-        if (value == null) {
-            return null;
-        }
-        return new ByteArrayInputStream(value.getBytes(StandardCharsets.UTF_8));
     }
 
     private String toString(final Optional<InputStream> stream) {

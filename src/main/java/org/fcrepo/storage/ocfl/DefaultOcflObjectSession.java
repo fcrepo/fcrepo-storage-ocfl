@@ -33,6 +33,8 @@ import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.fcrepo.storage.ocfl.cache.Cache;
+import org.fcrepo.storage.ocfl.exception.InvalidContentException;
+import org.fcrepo.storage.ocfl.exception.NotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
