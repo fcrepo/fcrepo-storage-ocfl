@@ -116,6 +116,7 @@ public class ObjectValidator {
             LOG.debug("Validating object {} version {}", ocflObjectId, versionNum);
 
             final var resourceParentMap = new HashMap<String, String>();
+            final var resourceIsDeletedMap = new HashMap<String, Boolean>();
             final var nonRdfDescriptions = new HashSet<String>();
             final var nonRdfResources = new HashSet<String>();
             final var headerFiles = new HashSet<String>();
@@ -144,6 +145,8 @@ public class ObjectValidator {
 
                     // Populates IDs in various data sets to be examined after validating the headers
                     if (headers.getId() != null) {
+                        resourceIsDeletedMap.put(headers.getId(), headers.isDeleted());
+
                         // Ensure that the interaction model for the resource has not changed between versions
                         if (headers.getInteractionModel() != null) {
                             final var previousModel = resourceModelMap.get(headers.getId());
@@ -203,7 +206,7 @@ public class ObjectValidator {
 
             validateNonRdfDescriptionsHaveNonRdfParent(versionNum, nonRdfDescriptions);
             validateNonRdfResourcesHaveDescription(versionNum, nonRdfResources);
-            validateArchivalGroupParentage(versionNum, resourceParentMap, rootHeaders);
+            validateArchivalGroupParentage(versionNum, resourceParentMap, resourceIsDeletedMap, rootHeaders);
 
             unseenContentFiles.forEach(unseenFile -> {
                 context.problem("[Version %s] Unexpected file: %s", versionNum, unseenFile);
@@ -273,10 +276,20 @@ public class ObjectValidator {
 
         private void validateArchivalGroupParentage(final VersionNum versionNum,
                                                     final Map<String, String> resourceParentMap,
+                                                    final Map<String, Boolean> resourceIsDeletedMap,
                                                     final ResourceHeaders rootHeaders) {
             if (rootHeaders.isArchivalGroup()) {
                 resourceParentMap.forEach((id, parent) -> {
                     if (!rootHeaders.getId().equals(id)) {
+                        final var childDeleted = resourceIsDeletedMap.getOrDefault(id, false);
+                        final var parentDeleted = resourceIsDeletedMap.getOrDefault(parent, false);
+
+                        if (parentDeleted && !childDeleted) {
+                            context.problem("[Version %s resource %s] Must be marked as deleted because parent" +
+                                            " %s is marked as deleted.",
+                                    versionNum, id, parent);
+                        }
+
                         final var model = resourceModelMap.get(id);
 
                         // ACLs may be the child of any resource and non-RDF descriptions are covered elsewhere

@@ -925,6 +925,23 @@ public class ObjectValidatorTest {
     }
 
     @Test
+    public void failWhenParentDeletedAndChildNot() {
+        final var childId = child(defaultId);
+        final var grandChildId = child(childId);
+
+        writeAndCommit(defaultId,
+                ResourceUtils.ag(defaultId, ROOT_RESOURCE, "ag"),
+                ResourceUtils.partContainer(childId, defaultId, defaultId, "rdf", headers -> {
+                    headers.withDeleted(true);
+                }),
+                ResourceUtils.partContainer(grandChildId, childId, defaultId, "bin"));
+
+        validationFailureStrict(defaultId, false,
+                containsString("[Version v1 resource " + grandChildId + "] Must be marked as deleted" +
+                        " because parent " + childId + " is marked as deleted."));
+    }
+
+    @Test
     public void failWhenHasUnexpectedFiles() {
         writeAndCommit(defaultId,
                 ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, "blah"));
