@@ -32,12 +32,25 @@ import java.util.function.Consumer;
  */
 public final class ResourceUtils {
 
+    private static final String ROOT_RESOURCE = "info:fedora";
     public static final String DEFAULT_USER = "fedoraAdmin";
     public static final String RDF_MIME = "text/turtle";
     public static final String TEXT_MIME = "text/plain";
 
     private ResourceUtils() {
 
+    }
+
+    public static String resourceId(final String id) {
+        return ROOT_RESOURCE + "/" + id;
+    }
+
+    public static String toDescId(final String id) {
+        return id + "/fcr:metadata";
+    }
+
+    public static String toAclId(final String id) {
+        return id + "/fcr:acl";
     }
 
     public static ResourceContent atomicBinary(final String resourceId, final String parentId, final String content) {

@@ -222,7 +222,9 @@ public class ObjectValidator {
 
             final var headers = parseHeaders(versionNum, headerFile);
 
-            final var problem = ValidationUtil.validateId("id", headers.getId());
+            final var idContext = new Context();
+            ValidationUtil.validateId(idContext, "id", headers.getId());
+            final var problem = idContext.getProblems().stream().findFirst().orElse(null);
 
             // Root resource ID MUST be valid
             if (problem != null) {

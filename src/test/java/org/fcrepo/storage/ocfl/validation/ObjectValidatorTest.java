@@ -39,7 +39,7 @@ import org.fcrepo.storage.ocfl.ResourceHeaders;
 import org.fcrepo.storage.ocfl.ResourceUtils;
 import org.fcrepo.storage.ocfl.cache.NoOpCache;
 import org.fcrepo.storage.ocfl.exception.ValidationException;
-import org.fcrepo.storage.ocfl.validation.ObjectValidator;
+import org.hamcrest.Matcher;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -53,12 +53,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItems;
 import static org.junit.Assert.fail;
 
 /**
@@ -118,9 +121,9 @@ public class ObjectValidatorTest {
         objectValidator = new ObjectValidator(ocflRepo, objectMapper.readerFor(ResourceHeaders.class));
 
         count = 0;
-        defaultId = resourceId(UUID.randomUUID().toString());
-        defaultAclId = toAclId(defaultId);
-        defaultDescId = toDescId(defaultId);
+        defaultId = ResourceUtils.resourceId(UUID.randomUUID().toString());
+        defaultAclId =  ResourceUtils.toAclId(defaultId);
+        defaultDescId =  ResourceUtils.toDescId(defaultId);
     }
 
     @Test
@@ -198,12 +201,12 @@ public class ObjectValidatorTest {
                 ResourceUtils.ag(defaultId, ROOT_RESOURCE, "ag"),
 
                 ResourceUtils.partBinary(binChildId, defaultId, defaultId, "bin1"),
-                ResourceUtils.partDesc(toDescId(binChildId), binChildId, defaultId, "bin1 desc"),
+                ResourceUtils.partDesc(ResourceUtils.toDescId(binChildId), binChildId, defaultId, "bin1 desc"),
 
                 ResourceUtils.partContainer(rdfChildId, defaultId, defaultId, "rdf"),
 
                 ResourceUtils.partBinary(binGrandChildId, rdfChildId, defaultId, "bin2"),
-                ResourceUtils.partDesc(toDescId(binGrandChildId), binGrandChildId, defaultId, "bin2 desc"));
+                ResourceUtils.partDesc(ResourceUtils.toDescId(binGrandChildId), binGrandChildId, defaultId, "bin2 desc"));
 
         objectValidator.validate(defaultId, true);
     }
@@ -238,15 +241,17 @@ public class ObjectValidatorTest {
                 ResourceUtils.partContainerAcl(defaultAclId, defaultId, defaultId, "ag acl"),
 
                 ResourceUtils.partBinary(binChildId, defaultId, defaultId, "bin1"),
-                ResourceUtils.partDesc(toDescId(binChildId), binChildId, defaultId, "bin1 desc"),
-                ResourceUtils.partBinaryAcl(toAclId(binChildId), binChildId, defaultId, "bin1 acl"),
+                ResourceUtils.partDesc(ResourceUtils.toDescId(binChildId), binChildId, defaultId, "bin1 desc"),
+                ResourceUtils.partBinaryAcl(ResourceUtils.toAclId(binChildId), binChildId, defaultId, "bin1 acl"),
 
                 ResourceUtils.partContainer(rdfChildId, defaultId, defaultId, "rdf"),
-                ResourceUtils.partContainerAcl(toAclId(rdfChildId), rdfChildId, defaultId, "rdf acl"),
+                ResourceUtils.partContainerAcl(ResourceUtils.toAclId(rdfChildId), rdfChildId, defaultId, "rdf acl"),
 
                 ResourceUtils.partBinary(binGrandChildId, rdfChildId, defaultId, "bin2"),
-                ResourceUtils.partDesc(toDescId(binGrandChildId), binGrandChildId, defaultId, "bin2 desc"),
-                ResourceUtils.partBinaryAcl(toAclId(binGrandChildId), binGrandChildId, defaultId, "bin2 acl"));
+                ResourceUtils.partDesc(ResourceUtils.toDescId(binGrandChildId), binGrandChildId, defaultId,
+                        "bin2 desc"),
+                ResourceUtils.partBinaryAcl(ResourceUtils.toAclId(binGrandChildId), binGrandChildId, defaultId,
+                        "bin2 acl"));
 
         objectValidator.validate(defaultId, true);
     }
@@ -278,12 +283,13 @@ public class ObjectValidatorTest {
                 ResourceUtils.ag(defaultId, ROOT_RESOURCE, "ag"),
 
                 ResourceUtils.partBinary(binChildId, defaultId, defaultId, "bin1"),
-                ResourceUtils.partDesc(toDescId(binChildId), binChildId, defaultId, "bin1 desc"),
+                ResourceUtils.partDesc(ResourceUtils.toDescId(binChildId), binChildId, defaultId, "bin1 desc"),
 
                 ResourceUtils.partContainer(rdfChildId, defaultId, defaultId, "rdf"),
 
                 ResourceUtils.partBinary(binGrandChildId, rdfChildId, defaultId, "bin2"),
-                ResourceUtils.partDesc(toDescId(binGrandChildId), binGrandChildId, defaultId, "bin2 desc"));
+                ResourceUtils.partDesc(ResourceUtils.toDescId(binGrandChildId), binGrandChildId, defaultId,
+                        "bin2 desc"));
 
         writeAndCommit(defaultId,
                 ResourceUtils.partContainer(rdfChildId, defaultId, defaultId, null, headers -> {
@@ -293,7 +299,8 @@ public class ObjectValidatorTest {
                 ResourceUtils.partBinary(binGrandChildId, rdfChildId, defaultId, null, headers -> {
                     headers.withDeleted(true);
                 }),
-                ResourceUtils.partDesc(toDescId(binGrandChildId), binGrandChildId, defaultId, null, headers -> {
+                ResourceUtils.partDesc(ResourceUtils.toDescId(binGrandChildId), binGrandChildId, defaultId,
+                        null, headers -> {
                     headers.withDeleted(true);
                 }));
 
@@ -310,12 +317,13 @@ public class ObjectValidatorTest {
                 ResourceUtils.ag(defaultId, ROOT_RESOURCE, "ag"),
 
                 ResourceUtils.partBinary(binChildId, defaultId, defaultId, "bin1"),
-                ResourceUtils.partDesc(toDescId(binChildId), binChildId, defaultId, "bin1 desc"),
+                ResourceUtils.partDesc(ResourceUtils.toDescId(binChildId), binChildId, defaultId, "bin1 desc"),
 
                 ResourceUtils.partContainer(rdfChildId, defaultId, defaultId, "rdf"),
 
                 ResourceUtils.partBinary(binGrandChildId, rdfChildId, defaultId, "bin2"),
-                ResourceUtils.partDesc(toDescId(binGrandChildId), binGrandChildId, defaultId, "bin2 desc"));
+                ResourceUtils.partDesc(ResourceUtils.toDescId(binGrandChildId), binGrandChildId, defaultId,
+                        "bin2 desc"));
 
         writeAndCommit(defaultId,
                 ResourceUtils.ag(defaultId, ROOT_RESOURCE, null, headers -> {
@@ -325,7 +333,7 @@ public class ObjectValidatorTest {
                 ResourceUtils.partBinary(binChildId, defaultId, defaultId, null, headers -> {
                     headers.withDeleted(true);
                 }),
-                ResourceUtils.partDesc(toDescId(binChildId), binChildId, defaultId, null, headers -> {
+                ResourceUtils.partDesc(ResourceUtils.toDescId(binChildId), binChildId, defaultId, null, headers -> {
                     headers.withDeleted(true);
                 }),
 
@@ -336,7 +344,8 @@ public class ObjectValidatorTest {
                 ResourceUtils.partBinary(binGrandChildId, rdfChildId, defaultId, null, headers -> {
                     headers.withDeleted(true);
                 }),
-                ResourceUtils.partDesc(toDescId(binGrandChildId), binGrandChildId, defaultId, null, headers -> {
+                ResourceUtils.partDesc(ResourceUtils.toDescId(binGrandChildId), binGrandChildId, defaultId, null,
+                        headers -> {
                     headers.withDeleted(true);
                 }));
 
@@ -345,7 +354,8 @@ public class ObjectValidatorTest {
 
     @Test
     public void failWhenObjectDoesNotExist() {
-        validationFailureStrict(defaultId, true, "does not exist in the repository");
+        validationFailureStrict(defaultId, true,
+                containsString("does not exist in the repository"));
     }
 
     @Test
@@ -355,7 +365,7 @@ public class ObjectValidatorTest {
         });
 
         validationFailureStrict(defaultId, true,
-                "[Version v1] Missing root header file at .fcrepo/fcr-root.json");
+                containsString("[Version v1] Missing root header file at .fcrepo/fcr-root.json"));
     }
 
     @Test
@@ -367,7 +377,7 @@ public class ObjectValidatorTest {
         Files.writeString(headersPath, "blah", StandardCharsets.UTF_8, StandardOpenOption.TRUNCATE_EXISTING);
 
         validationFailureStrict(defaultId, true,
-                "[Version v1 header file .fcrepo/fcr-root.json] Failed to parse");
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Failed to parse"));
     }
 
     @Test
@@ -381,7 +391,7 @@ public class ObjectValidatorTest {
         });
 
         validationFailureStrict(defaultId, true,
-                "[Version v1 header file .fcrepo/fcr-root.json] Must define property 'id'");
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Must define property 'id'"));
     }
 
     @Test
@@ -395,8 +405,8 @@ public class ObjectValidatorTest {
         });
 
         validationFailureStrict(defaultId, true,
-                "[Version v1 header file .fcrepo/fcr-root.json] Invalid 'id' value 'bogus'." +
-                        " IDs must be prefixed with 'info:fedora/'");
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Invalid 'id' value 'bogus'." +
+                        " IDs must be prefixed with 'info:fedora/'"));
     }
 
     @Test
@@ -410,7 +420,8 @@ public class ObjectValidatorTest {
         });
 
         validationFailureRelaxed(defaultId, false,
-                "[Version v1 header file .fcrepo/fcr-root.json] Must define property 'interactionModel'");
+                containsString("[Version v1 header file .fcrepo/fcr-root.json]" +
+                        " Must define property 'interactionModel'"));
     }
 
     @Test
@@ -424,7 +435,8 @@ public class ObjectValidatorTest {
         });
 
         validationFailureStrict(defaultId, false,
-                "[Version v1 header file .fcrepo/fcr-root.json] Invalid interaction model value: bogus.");
+                containsString("[Version v1 header file .fcrepo/fcr-root.json]" +
+                        " Invalid interaction model value: bogus."));
     }
 
     @Test
@@ -438,8 +450,8 @@ public class ObjectValidatorTest {
         });
 
         validationFailureRelaxed(defaultId, false,
-                "[Version v1 header file .fcrepo/fcr-root.json] Invalid interaction" +
-                        " model value: http://fedora.info/definitions/v4/webac#Acl.");
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Invalid interaction" +
+                        " model value: http://fedora.info/definitions/v4/webac#Acl."));
     }
 
     @Test
@@ -453,8 +465,8 @@ public class ObjectValidatorTest {
         });
 
         validationFailureRelaxed(defaultId, false,
-                "[Version v1 header file .fcrepo/fcr-root.json] Invalid interaction" +
-                        " model value: http://fedora.info/definitions/v4/repository#NonRdfSourceDescription.");
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Invalid interaction" +
+                        " model value: http://fedora.info/definitions/v4/repository#NonRdfSourceDescription."));
     }
 
     @Test
@@ -470,12 +482,12 @@ public class ObjectValidatorTest {
         });
 
         validationFailureStrict(defaultId, false,
-                "[Version v1 header file .fcrepo/fcr-root.json] Must define property 'id' as '"
-                        + defaultId + "' but was 'info:fedora/bogus'",
-                "[Version v1 header file .fcrepo/fcr-root.json] Must define property 'objectRoot' as 'true'" +
-                        " but was 'false'",
-                "[Version v1 header file .fcrepo/fcr-root.json] Must define property 'archivalGroupId' as 'null'" +
-                        " but was 'info:fedora'");
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Must define property 'id' as '"
+                        + defaultId + "' but was 'info:fedora/bogus'"),
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Must define property 'objectRoot'" +
+                        " as 'true' but was 'false'"),
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Must define property" +
+                        " 'archivalGroupId' as 'null' but was 'info:fedora'"));
     }
 
     @Test
@@ -489,8 +501,8 @@ public class ObjectValidatorTest {
         });
 
         validationFailureRelaxed(defaultId, true,
-                "[Version v1 header file .fcrepo/fcr-root.json] Archival Group has an" +
-                        " invalid interaction model: http://www.w3.org/ns/ldp#NonRDFSource");
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Archival Group has an" +
+                        " invalid interaction model: http://www.w3.org/ns/ldp#NonRDFSource"));
     }
 
     @Test
@@ -503,9 +515,9 @@ public class ObjectValidatorTest {
                 ResourceUtils.atomicDesc(defaultDescId, defaultId, "blah desc"));
 
         validationFailureRelaxed(defaultId, false,
-                "[Version v2 header file .fcrepo/fcr-root.json] Interaction model declared" +
+                containsString("[Version v2 header file .fcrepo/fcr-root.json] Interaction model declared" +
                         " as http://www.w3.org/ns/ldp#NonRDFSource but a previous version declares the" +
-                        " model as http://www.w3.org/ns/ldp#BasicContainer.");
+                        " model as http://www.w3.org/ns/ldp#BasicContainer."));
     }
 
     @Test
@@ -527,16 +539,24 @@ public class ObjectValidatorTest {
         });
 
         validationFailureRelaxed(defaultId, false,
-                "[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must define property 'createdDate'",
-                "[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must define property 'lastModifiedDate'",
-                "[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must define property 'interactionModel'",
-                "[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must contain a 'digests' property with at" +
-                        " least one entry.",
-                "[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must define property 'stateToken'",
-                "[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must define property 'parent'",
-                "[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must define property 'interactionModel'",
-                "[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Invalid interaction model null." +
-                        " Atomic resources may only contain ACLs and non-RDF descriptions.");
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-desc.json]" +
+                        " Must define property 'createdDate'"),
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-desc.json]" +
+                        " Must define property 'lastModifiedDate'"),
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-desc.json]" +
+                        " Must define property 'interactionModel'"),
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-desc.json]" +
+                        " Must contain a 'digests' property with at" +
+                        " least one entry."),
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-desc.json]" +
+                        " Must define property 'stateToken'"),
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-desc.json]" +
+                        " Must define property 'parent'"),
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-desc.json]" +
+                        " Must define property 'interactionModel'"),
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-desc.json]" +
+                        " Invalid interaction model null." +
+                        " Atomic resources may only contain ACLs and non-RDF descriptions."));
     }
 
     @Test
@@ -548,14 +568,14 @@ public class ObjectValidatorTest {
         final var headersPath = storagePath(defaultId, 1,
                 PersistencePaths.headerPath(defaultId, defaultDescId));
         modifyHeaders(headersPath, headers -> {
-            headers.withId(resourceId("orphan"));
+            headers.withId(ResourceUtils.resourceId("orphan"));
         });
 
         validationFailureRelaxed(defaultId, false,
-                "[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] IDs that must be related:" +
-                        " parent=" + defaultId + "; id=info:fedora/orphan.",
-                        "[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must define property 'id' as" +
-                                " '" + defaultDescId + "' but was 'info:fedora/orphan'");
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] IDs" +
+                        " must be related: parent=" + defaultId + "; id=info:fedora/orphan."),
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must define property 'id' as" +
+                                " '" + defaultDescId + "' but was 'info:fedora/orphan'"));
     }
 
     @Test
@@ -569,8 +589,8 @@ public class ObjectValidatorTest {
         });
 
         validationFailureStrict(defaultId, true,
-                "[Version v2 header file .fcrepo/headers.json] Header file should be located at" +
-                        " .fcrepo/fcr-root~fcr-desc.json");
+                containsString("[Version v2 header file .fcrepo/headers.json] Header file" +
+                        " should be located at .fcrepo/fcr-root~fcr-desc.json"));
     }
 
     @Test
@@ -582,8 +602,8 @@ public class ObjectValidatorTest {
                 ResourceUtils.atomicDesc(defaultDescId, defaultId, "blah desc"));
 
         validationFailureStrict(defaultId, true,
-                "[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must define property" +
-                        " 'deleted' as 'true' but was 'false'");
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-desc.json]" +
+                        " Must define property 'deleted' as 'true' but was 'false'"));
     }
 
     @Test
@@ -599,13 +619,14 @@ public class ObjectValidatorTest {
                 }));
 
         validationFailureStrict(defaultId, false,
-                "[Version v1 header file .fcrepo/fcr-root.json] Digests must be formatted as" +
-                        " 'urn:ALGORITHM:DIGEST'. Found: .",
-                "Version v1 header file .fcrepo/fcr-root.json] Digests must begin with 'urn'. Found: bogus:md5:blah.",
-                "[Version v1 header file .fcrepo/fcr-root.json] Digests must be formatted as 'urn:ALGORITHM:DIGEST'." +
-                        " Found: urn:sha1.",
-                "[Version v1 header file .fcrepo/fcr-root.json] Digest 'urn:sha100:asdf' contains an" +
-                        " invalid algorithm 'sha100'.");
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Digests must" +
+                        " be formatted as 'urn:ALGORITHM:DIGEST'. Found: ."),
+                containsString("Version v1 header file .fcrepo/fcr-root.json] Digests must begin with 'urn'." +
+                        " Found: bogus:md5:blah."),
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Digests must be formatted as" +
+                        " 'urn:ALGORITHM:DIGEST'. Found: urn:sha1."),
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Digest 'urn:sha100:asdf' contains an" +
+                        " invalid algorithm 'sha100'."));
     }
 
     @Test
@@ -617,7 +638,8 @@ public class ObjectValidatorTest {
                 ResourceUtils.atomicDesc(defaultDescId, defaultId, "blah desc"));
 
         validationFailureStrict(defaultId, true,
-                "[Version v1 header file .fcrepo/fcr-root.json] Must define property 'mimeType'");
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Must define" +
+                        " property 'mimeType'"));
     }
 
     @Test
@@ -641,7 +663,8 @@ public class ObjectValidatorTest {
                 ResourceUtils.atomicDesc(defaultDescId, defaultId, "blah desc"));
 
         validationFailureStrict(defaultId, true,
-                "[Version v1 header file .fcrepo/fcr-root.json] Must define property 'externalUrl'");
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Must define" +
+                        " property 'externalUrl'"));
     }
 
     @Test
@@ -655,7 +678,8 @@ public class ObjectValidatorTest {
                 ResourceUtils.atomicDesc(defaultDescId, defaultId, "blah desc"));
 
         validationFailureStrict(defaultId, true,
-                "[Version v1 header file .fcrepo/fcr-root.json] Property 'externalHandling' as one of ");
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Must define property" +
+                        " 'externalHandling' as one of "));
     }
 
     @Test
@@ -669,7 +693,8 @@ public class ObjectValidatorTest {
                 ResourceUtils.atomicDesc(defaultDescId, defaultId, "blah desc"));
 
         validationFailureStrict(defaultId, true,
-                "[Version v1 header file .fcrepo/fcr-root.json] Property 'externalHandling' as one of ");
+                containsString("[Version v1 header file .fcrepo/fcr-root.json] Must define property" +
+                        " 'externalHandling' as one of "));
     }
 
     @Test
@@ -688,9 +713,9 @@ public class ObjectValidatorTest {
         });
 
         validationFailureRelaxed(defaultId, false,
-                "[Version v1 header file .fcrepo/fcr-root.json] Must define property" +
-                        " 'interactionModel' as 'http://www.w3.org/ns/ldp#NonRDFSource'" +
-                        " but was 'http://www.w3.org/ns/ldp#BasicContainer'");
+                containsString("[Version v1 header file .fcrepo/fcr-root.json]" +
+                        " Must define property 'interactionModel' as 'http://www.w3.org/ns/ldp#NonRDFSource'" +
+                        " but was 'http://www.w3.org/ns/ldp#BasicContainer'"));
     }
 
     @Test
@@ -710,10 +735,12 @@ public class ObjectValidatorTest {
         });
 
         validationFailureStrict(defaultId, false,
-                "[Version v1 header file .fcrepo/0.json] Must define property 'objectRoot' as 'false' but was 'true'",
-                "[Version v1 header file .fcrepo/0.json] Must define property 'archivalGroup' as 'false' but was 'true'",
-                "[Version v1 header file .fcrepo/0.json] Must define property 'archivalGroupId' as '"
-                        + defaultId + "' but was 'null'");
+                containsString("[Version v1 header file .fcrepo/0.json] Must define property" +
+                        " 'objectRoot' as 'false' but was 'true'"),
+                containsString("[Version v1 header file .fcrepo/0.json] Must define property 'archivalGroup'" +
+                        " as 'false' but was 'true'"),
+                containsString("[Version v1 header file .fcrepo/0.json] Must define property 'archivalGroupId' as '"
+                        + defaultId + "' but was 'null'"));
     }
 
     @Test
@@ -731,12 +758,12 @@ public class ObjectValidatorTest {
         });
 
         validationFailureStrict(defaultId, false,
-                "[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must define property" +
-                        " 'objectRoot' as 'false' but was 'true'",
-                "[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must define property 'archivalGroup' as" +
-                        " 'false' but was 'true'",
-                "[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must define property 'archivalGroupId' as" +
-                        " 'null' but was '" + defaultId + "'");
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-desc.json]" +
+                        " Must define property 'objectRoot' as 'false' but was 'true'"),
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must define property" +
+                        " 'archivalGroup' as 'false' but was 'true'"),
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must define property" +
+                        " 'archivalGroupId' as 'null' but was '" + defaultId + "'"));
     }
 
     @Test
@@ -755,12 +782,12 @@ public class ObjectValidatorTest {
         });
 
         validationFailureStrict(defaultId, false,
-                "[Version v1 header file .fcrepo/fcr-root~fcr-acl.json] Must define property" +
-                        " 'objectRoot' as 'false' but was 'true'",
-                "[Version v1 header file .fcrepo/fcr-root~fcr-acl.json] Must define property 'archivalGroup'" +
-                        " as 'false' but was 'true'",
-                "[Version v1 header file .fcrepo/fcr-root~fcr-acl.json] Must define property 'archivalGroupId'" +
-                        " as 'null' but was '" + defaultId + "'");
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-acl.json]" +
+                        " Must define property 'objectRoot' as 'false' but was 'true'"),
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-acl.json] Must define property" +
+                        " 'archivalGroup' as 'false' but was 'true'"),
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-acl.json] Must define property" +
+                        " 'archivalGroupId' as 'null' but was '" + defaultId + "'"));
     }
 
     @Test
@@ -774,12 +801,12 @@ public class ObjectValidatorTest {
                 ResourceUtils.atomicContainer(childId2, defaultId, "child2"));
 
         validationFailureRelaxed(defaultId, false,
-                "[Version v1 header file .fcrepo/0.json] Invalid interaction model" +
+                containsString("[Version v1 header file .fcrepo/0.json] Invalid interaction model" +
                         " http://www.w3.org/ns/ldp#NonRDFSource. Atomic resources may only contain ACLs" +
-                        " and non-RDF descriptions.",
-                        "[Version v1 header file .fcrepo/1.json] Invalid interaction model" +
+                        " and non-RDF descriptions."),
+                containsString("[Version v1 header file .fcrepo/1.json] Invalid interaction model" +
                         " http://www.w3.org/ns/ldp#BasicContainer. Atomic resources may only contain" +
-                        " ACLs and non-RDF descriptions.");
+                        " ACLs and non-RDF descriptions."));
     }
 
     @Test
@@ -804,10 +831,10 @@ public class ObjectValidatorTest {
         });
 
         validationFailureRelaxed(defaultId, false,
-                "[Version v1 header file .fcrepo/fcr-root~fcr-desc.json] Must define property 'id' as '" +
-                        defaultDescId + "' but was '" + bogusDescId + "'",
-                        "[Version v1 header file .fcrepo/fcr-root~fcr-acl.json] Must define property 'id' as '" +
-                        defaultAclId + "' but was '" + bogusAclId + "'");
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-desc.json]" +
+                        " Must define property 'id' as '" + defaultDescId + "' but was '" + bogusDescId + "'"),
+                containsString("[Version v1 header file .fcrepo/fcr-root~fcr-acl.json] Must define property 'id' as '" +
+                        defaultAclId + "' but was '" + bogusAclId + "'"));
     }
 
     @Test
@@ -822,7 +849,8 @@ public class ObjectValidatorTest {
         });
 
         validationFailureStrict(defaultId, true,
-                "[Version v1 file .fcrepo/fcr-root.json] Failed fixity check: Expected sha-512 digest: ");
+                containsString("[Version v1 file .fcrepo/fcr-root.json] Failed fixity check:" +
+                        " Expected sha-512 digest: "));
     }
 
     @Test
@@ -835,7 +863,8 @@ public class ObjectValidatorTest {
         Files.writeString(contentPath, "changed!", StandardOpenOption.TRUNCATE_EXISTING);
 
         validationFailureStrict(defaultId, true,
-                "[Version v1 file fcr-container.nt] Failed fixity check: SHA-512 fixity check failed. Expected: ");
+                containsString("[Version v1 file fcr-container.nt] Failed fixity check:" +
+                        " SHA-512 fixity check failed. Expected: "));
     }
 
     @Test
@@ -845,7 +874,8 @@ public class ObjectValidatorTest {
                 ResourceUtils.atomicDesc(defaultDescId, defaultId, "desc"));
 
         validationFailureStrict(defaultId, true,
-                "[Version v1 resource " + defaultDescId + "] Must be the child of a non-RDF resource.");
+                containsString("[Version v1 resource " + defaultDescId + "] Must be the" +
+                        " child of a non-RDF resource."));
     }
 
     @Test
@@ -854,7 +884,8 @@ public class ObjectValidatorTest {
                 ResourceUtils.atomicBinary(defaultId, ROOT_RESOURCE, "blah"));
 
         validationFailureStrict(defaultId, true,
-                "[Version v1 resource " + defaultId + "] Non-RDF resource without a non-RDF description");
+                containsString("[Version v1 resource " + defaultId + "]" +
+                        " Non-RDF resource without a non-RDF description"));
     }
 
     @Test
@@ -867,7 +898,8 @@ public class ObjectValidatorTest {
                 ResourceUtils.partContainer(grandChildId, childId, defaultId, "rdf"));
 
         validationFailureStrict(defaultId, true,
-                "[Version v1 resource " + grandChildId + "] Parent " + childId + " does not exist.");
+                containsString("[Version v1 resource " + grandChildId + "] Parent "
+                        + childId + " does not exist."));
     }
 
     @Test
@@ -887,8 +919,9 @@ public class ObjectValidatorTest {
         });
 
         validationFailureRelaxed(defaultId, false,
-                "[Version v1 resource " + grandChildId + "] Parent " + childId + " has interaction" +
-                        " model http://www.w3.org/ns/ldp#NonRDFSource, which cannot have children.");
+                containsString("[Version v1 resource " + grandChildId + "] Parent "
+                        + childId + " has interaction" +
+                        " model http://www.w3.org/ns/ldp#NonRDFSource, which cannot have children."));
     }
 
     @Test
@@ -901,7 +934,7 @@ public class ObjectValidatorTest {
         });
 
         validationFailureStrict(defaultId, true,
-                "[Version v2] Unexpected file: secrets.txt");
+                containsString("[Version v2] Unexpected file: secrets.txt"));
     }
 
     @Test
@@ -909,13 +942,13 @@ public class ObjectValidatorTest {
         final var binChildId = child(defaultId);
         final var rdfChildId = child(defaultId);
         final var binGrandChildId = child(rdfChildId);
-        final var binGrandChildDescId = toDescId(binGrandChildId);
+        final var binGrandChildDescId =  ResourceUtils.toDescId(binGrandChildId);
 
         writeAndCommit(defaultId,
                 ResourceUtils.ag(defaultId, ROOT_RESOURCE, "ag"),
 
                 ResourceUtils.partBinary(binChildId, defaultId, defaultId, "bin1"),
-                ResourceUtils.partDesc(toDescId(binChildId), binChildId, defaultId, "bin1 desc"),
+                ResourceUtils.partDesc(ResourceUtils.toDescId(binChildId), binChildId, defaultId, "bin1 desc"),
 
                 ResourceUtils.partContainer(rdfChildId, defaultId, defaultId, "rdf"),
 
@@ -938,59 +971,55 @@ public class ObjectValidatorTest {
         Files.delete(contentPath);
 
         validationFailureStrict(defaultId, true,
-                "[Version v1 file 1/2~fcr-desc.nt] Failed to check fixity: NoSuchFileException:",
-                "[Version v2 file 1/2~fcr-desc.nt] Failed to check fixity: NoSuchFileException:",
-                "[Version v2 header file .fcrepo/1/3.json] IDs that must be related: parent="
-                        + binGrandChildId + "; id=" + invalidChildId + ".",
-                "[Version v2 resource " + invalidChildId + "] Parent " + binGrandChildId + " has interaction" +
-                        " model http://www.w3.org/ns/ldp#NonRDFSource, which cannot have children.",
-                "[Version v3 header file .fcrepo/4.json] Must define property 'objectRoot' as 'false' but was 'true'",
-                "[Version v3 header file .fcrepo/4.json] Must define property 'archivalGroupId' as '" + defaultId
-                        + "' but was 'null'",
-                "[Version v3 file 1/2~fcr-desc.nt] Failed to check fixity: NoSuchFileException:",
-                "[Version v3 header file .fcrepo/1/3.json] IDs that must be related: parent="
-                        + binGrandChildId + "; id=" + invalidChildId + ".",
-                "[Version v3 resource " + atomicChildId + "] Non-RDF resource without a non-RDF description",
-                "[Version v3 resource " + invalidChildId + "] Parent " + binGrandChildId + " has interaction" +
-                        " model http://www.w3.org/ns/ldp#NonRDFSource, which cannot have children.");
+                containsString("[Version v1 file 1/2~fcr-desc.nt] Failed to check fixity:" +
+                        " NoSuchFileException:"),
+                containsString("[Version v2 file 1/2~fcr-desc.nt] Failed to check fixity: NoSuchFileException:"),
+                containsString("[Version v2 header file .fcrepo/1/3.json] IDs must be related: parent="
+                        + binGrandChildId + "; id=" + invalidChildId + "."),
+                containsString("[Version v2 resource " + invalidChildId + "] Parent " + binGrandChildId
+                        + " has interaction model http://www.w3.org/ns/ldp#NonRDFSource, which cannot have children."),
+                containsString("[Version v3 header file .fcrepo/4.json] Must define property 'objectRoot' as" +
+                        " 'false' but was 'true'"),
+                containsString("[Version v3 header file .fcrepo/4.json] Must define property 'archivalGroupId' as '"
+                        + defaultId + "' but was 'null'"),
+                containsString("[Version v3 file 1/2~fcr-desc.nt] Failed to check fixity: NoSuchFileException:"),
+                containsString("[Version v3 header file .fcrepo/1/3.json] IDs must be related: parent="
+                        + binGrandChildId + "; id=" + invalidChildId + "."),
+                containsString("[Version v3 resource " + atomicChildId + "] Non-RDF resource without a" +
+                        " non-RDF description"),
+                containsString("[Version v3 resource " + invalidChildId + "] Parent "
+                        + binGrandChildId + " has interaction model http://www.w3.org/ns/ldp#NonRDFSource," +
+                        " which cannot have children."));
     }
 
-    private void validationFailureRelaxed(final String id, final boolean checkFixity, final String... expectedProblems) {
+    @SafeVarargs
+    private void validationFailureRelaxed(final String id,
+                                          final boolean checkFixity,
+                                          final Matcher<String>... expectedProblems) {
         validationFailure(id, checkFixity, false, expectedProblems);
     }
 
-    private void validationFailureStrict(final String id, final boolean checkFixity, final String... expectedProblems) {
+    @SafeVarargs
+    private void validationFailureStrict(final String id,
+                                         final boolean checkFixity,
+                                         final Matcher<String>... expectedProblems) {
         validationFailure(id, checkFixity, true, expectedProblems);
     }
 
+    @SafeVarargs
     private void validationFailure(final String id,
                                    final boolean checkFixity,
                                    final boolean matchAll,
-                                   final String... expectedProblems) {
+                                   final Matcher<String>... expectedProblems) {
         try {
             objectValidator.validate(id, checkFixity);
             fail(String.format("Expected validation of %s to fail with problems: %s",
                     id, Arrays.asList(expectedProblems)));
         } catch (ValidationException e) {
-            final var actualProblems = e.getProblems();
-            final var actualNotFound = new HashSet<>(actualProblems);
-            final var expectNotFound = new HashSet<>(Arrays.asList(expectedProblems));
-
-            for (var expected : expectedProblems) {
-                for (var actual : actualProblems) {
-                    if (actual.contains(expected)) {
-                        expectNotFound.remove(expected);
-                        actualNotFound.remove(actual);
-                        break;
-                    }
-                }
-            }
-
-            if (!expectNotFound.isEmpty()) {
-                fail(String.format("Expected problems not found. Actual: %s; Missing: %s", actualProblems, expectNotFound));
-            }
-            if (matchAll && !actualNotFound.isEmpty()) {
-                fail(String.format("Unexpected problems found: %s", actualNotFound));
+            if (matchAll) {
+                assertThat(e.getProblems(), containsInAnyOrder(expectedProblems));
+            } else {
+                assertThat(e.getProblems(), hasItems(expectedProblems));
             }
         }
     }
@@ -1023,18 +1052,6 @@ public class ObjectValidatorTest {
                     logicalPath, id, versionNum));
         }
         return ocflRoot.resolve(file.getStorageRelativePath());
-    }
-
-    private String resourceId(final String id) {
-        return ROOT_RESOURCE + "/" + id;
-    }
-
-    private String toDescId(final String id) {
-        return id + "/fcr:metadata";
-    }
-
-    private String toAclId(final String id) {
-        return id + "/fcr:acl";
     }
 
     private String child(final String id) {
