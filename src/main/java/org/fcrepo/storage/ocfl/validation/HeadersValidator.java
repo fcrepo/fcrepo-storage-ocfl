@@ -129,7 +129,7 @@ public class HeadersValidator {
 
             if (headers.getExternalHandling() == null
                     || !VALID_EXT_HANDLING.contains(headers.getExternalHandling())) {
-                context.problem("Property 'externalHandling' as one of %s", VALID_EXT_HANDLING);
+                context.problem("Must define property 'externalHandling' as one of %s", VALID_EXT_HANDLING);
             }
 
             ValidationUtil.requireValue(context, "interactionModel",

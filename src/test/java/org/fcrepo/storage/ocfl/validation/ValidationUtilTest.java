@@ -20,7 +20,8 @@ package org.fcrepo.storage.ocfl.validation;
 
 import org.fcrepo.storage.ocfl.InteractionModel;
 import org.fcrepo.storage.ocfl.ResourceHeaders;
-import org.junit.Assert;
+import org.fcrepo.storage.ocfl.ResourceUtils;
+import org.hamcrest.Matcher;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -28,20 +29,19 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.containsString;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 /**
  * @author pwinckles
  */
 public class ValidationUtilTest {
-
-    private static final String ROOT_RESOURCE = "info:fedora";
 
     private static final Set<String> FORBIDDEN_PARTS = Set.of(
             "fcr-root",
@@ -84,85 +84,85 @@ public class ValidationUtilTest {
     @Test
     public void validateModelFailsWhenNull() {
         ValidationUtil.validateInteractionModel(context, null);
-        failsWith("Must define property 'interactionModel'");
+        failsWith(containsString("Must define property 'interactionModel'"));
     }
 
     @Test
     public void validateModelFailsWhenInvalid() {
         ValidationUtil.validateInteractionModel(context, "bogus");
-        failsWith("Invalid interaction model value: bogus.");
+        failsWith(containsString("Invalid interaction model value: bogus."));
     }
 
     @Test
     public void validateIdFailWhenNull() {
         ValidationUtil.validateId(context, "id", null);
-        failsWith("Must define property 'id'");
+        failsWith(containsString("Must define property 'id'"));
     }
 
     @Test
     public void validateIdFailMissingPrefix() {
         ValidationUtil.validateId(context, "id", "asdf");
-        failsWith("Invalid 'id' value 'asdf'. IDs must be prefixed with 'info:fedora/'");
+        failsWith(containsString("Invalid 'id' value 'asdf'. IDs must be prefixed with 'info:fedora/'"));
     }
 
     @Test
     public void validateIdFailWhenEmptyPart() {
-        ValidationUtil.validateId(context, "id", resourceId("a//b"));
-        failsWith("Invalid 'id' value 'info:fedora/a//b'. IDs may not contain blank parts");
+        ValidationUtil.validateId(context, "id", ResourceUtils.resourceId("a//b"));
+        failsWith(containsString("Invalid 'id' value 'info:fedora/a//b'. IDs may not contain blank parts"));
     }
 
     @Test
     public void validateIdFailWhenContainsIllegalParts() {
-        final var tmpl = resourceId("a/%s/b");
+        final var tmpl = ResourceUtils.resourceId("a/%s/b");
         FORBIDDEN_PARTS.forEach(part -> {
             ValidationUtil.validateId(context, "id", String.format(tmpl, part));
         });
-        failsWith("Invalid 'id' value 'info:fedora/a/fcr-root/b'. IDs may not contain parts equal to 'fcr-root'",
-                "Invalid 'id' value 'info:fedora/a/fcr:versions/b'. IDs may not contain parts equal to 'fcr:versions'",
-                "Invalid 'id' value 'info:fedora/a/.fcrepo/b'. IDs may not contain parts equal to '.fcrepo'",
-                "Invalid 'id' value 'info:fedora/a/fcr-container.nt/b'. IDs may not contain parts equal" +
-                        " to 'fcr-container.nt'",
-                "Invalid 'id' value 'info:fedora/a/fcr:tombstone/b'. IDs may not contain parts equal to" +
-                        " 'fcr:tombstone'");
+        failsWith(containsString("Invalid 'id' value 'info:fedora/a/fcr-root/b'. IDs may not contain parts equal to 'fcr-root'"),
+                containsString("Invalid 'id' value 'info:fedora/a/fcr:versions/b'. IDs may not contain parts equal to 'fcr:versions'"),
+                containsString("Invalid 'id' value 'info:fedora/a/.fcrepo/b'. IDs may not contain parts equal to '.fcrepo'"),
+                containsString("Invalid 'id' value 'info:fedora/a/fcr-container.nt/b'. IDs may not contain parts equal" +
+                        " to 'fcr-container.nt'"),
+                containsString("Invalid 'id' value 'info:fedora/a/fcr:tombstone/b'. IDs may not contain parts equal to" +
+                        " 'fcr:tombstone'"));
     }
 
     @Test
     public void validateIdFailWhenContainsIllegalSuffix() {
-        final var tmpl = resourceId("a/b/c%s");
+        final var tmpl = ResourceUtils.resourceId("a/b/c%s");
         FORBIDDEN_SUFFIXES.forEach(part -> {
             ValidationUtil.validateId(context, "id", String.format(tmpl, part));
         });
-        failsWith("Invalid 'id' value 'info:fedora/a/b/c~fcr-acl.nt'. IDs may not contain parts that end with '~fcr-acl.nt'",
-                "Invalid 'id' value 'info:fedora/a/b/c~fcr-desc'. IDs may not contain parts that end with '~fcr-desc'",
-                "Invalid 'id' value 'info:fedora/a/b/c~fcr-desc.nt'. IDs may not contain parts that end" +
-                        " with '~fcr-desc.nt'",
-                "Invalid 'id' value 'info:fedora/a/b/c~fcr-acl'. IDs may not contain parts that end with '~fcr-acl'");
+        failsWith(containsString("Invalid 'id' value 'info:fedora/a/b/c~fcr-acl.nt'. IDs may not contain parts that end with '~fcr-acl.nt'"),
+                containsString("Invalid 'id' value 'info:fedora/a/b/c~fcr-desc'. IDs may not contain parts that end with '~fcr-desc'"),
+                containsString("Invalid 'id' value 'info:fedora/a/b/c~fcr-desc.nt'. IDs may not contain parts that end" +
+                        " with '~fcr-desc.nt'"),
+                containsString("Invalid 'id' value 'info:fedora/a/b/c~fcr-acl'. IDs may not contain parts that end with '~fcr-acl'"));
     }
 
     @Test
     public void validateValidateId() {
-        ValidationUtil.validateId(context, "id", resourceId("hello"));
+        ValidationUtil.validateId(context, "id", ResourceUtils.resourceId("hello"));
         context.throwValidationException();
     }
 
     @Test
     public void validateRelatedIds() {
-        ValidationUtil.validateIdRelationship(context, "parent", resourceId("foo"),
-                "id", resourceId("foo/bar"));
+        ValidationUtil.validateIdRelationship(context, "parent", ResourceUtils.resourceId("foo"),
+                "id", ResourceUtils.resourceId("foo/bar"));
         context.throwValidationException();
     }
 
     @Test
     public void validateRelatedIdsSame() {
-        ValidationUtil.validateIdRelationship(context, "parent", resourceId("foo"),
-                "id", resourceId("foo"));
+        ValidationUtil.validateIdRelationship(context, "parent", ResourceUtils.resourceId("foo"),
+                "id", ResourceUtils.resourceId("foo"));
         context.throwValidationException();
     }
 
     @Test
     public void validateRelatedIdsParentEndingInSlash() {
-        ValidationUtil.validateIdRelationship(context, "parent", resourceId("foo/"),
-                "id", resourceId("foo/bar/baz"));
+        ValidationUtil.validateIdRelationship(context, "parent", ResourceUtils.resourceId("foo/"),
+                "id", ResourceUtils.resourceId("foo/bar/baz"));
         context.throwValidationException();
     }
 
@@ -176,22 +176,22 @@ public class ValidationUtilTest {
     @Test
     public void validateRelatedWhenParentOnlyNull() {
         ValidationUtil.validateIdRelationship(context, "parent", null,
-                "id", resourceId("foo"));
+                "id", ResourceUtils.resourceId("foo"));
         context.throwValidationException();
     }
 
     @Test
     public void validateRelatedWhenChildOnlyNull() {
-        ValidationUtil.validateIdRelationship(context, "parent", resourceId("foo"),
+        ValidationUtil.validateIdRelationship(context, "parent", ResourceUtils.resourceId("foo"),
                 "id", null);
         context.throwValidationException();
     }
 
     @Test
     public void failValidateRelatedWhenNotRelated() {
-        ValidationUtil.validateIdRelationship(context, "parent", resourceId("foo"),
-                "id", resourceId("bar"));
-        failsWith("IDs that must be related: parent=info:fedora/foo; id=info:fedora/bar.");
+        ValidationUtil.validateIdRelationship(context, "parent", ResourceUtils.resourceId("foo"),
+                "id", ResourceUtils.resourceId("bar"));
+        failsWith(containsString("IDs must be related: parent=info:fedora/foo; id=info:fedora/bar."));
     }
 
     @Test
@@ -226,17 +226,17 @@ public class ValidationUtilTest {
                 URI.create("a:b"),
                 URI.create("urn:bogus:asdf")
         ));
-        failsWith("Digests must be formatted as 'urn:ALGORITHM:DIGEST'. Found: .",
-                "Digests must begin with 'urn'. Found: a:b:c.",
-                "Digest 'a:b:c' contains an invalid algorithm 'b'.",
-                "Digests must be formatted as 'urn:ALGORITHM:DIGEST'. Found: a:b.",
-                "Digest 'urn:bogus:asdf' contains an invalid algorithm 'bogus'.");
+        failsWith(containsString("Digests must be formatted as 'urn:ALGORITHM:DIGEST'. Found: ."),
+                containsString("Digests must begin with 'urn'. Found: a:b:c."),
+                containsString("Digest 'a:b:c' contains an invalid algorithm 'b'."),
+                containsString("Digests must be formatted as 'urn:ALGORITHM:DIGEST'. Found: a:b."),
+                containsString("Digest 'urn:bogus:asdf' contains an invalid algorithm 'bogus'."));
     }
 
     @Test
     public void failRequireNonNullWhenNull() {
         ValidationUtil.requireNotNull(context, "asdf", null);
-        failsWith("Must define property 'asdf'");
+        failsWith(containsString("Must define property 'asdf'"));
     }
 
     @Test
@@ -248,13 +248,13 @@ public class ValidationUtilTest {
     @Test
     public void failRequireNonEmptyWhenNull() {
         ValidationUtil.requireNotEmpty(context, "asdf", null);
-        failsWith("Must define property 'asdf'");
+        failsWith(containsString("Must define property 'asdf'"));
     }
 
     @Test
     public void failRequireNonEmptyWhenEmpty() {
         ValidationUtil.requireNotEmpty(context, "asdf", Collections.emptyList());
-        failsWith("Must contain a 'asdf' property with at least one entry.");
+        failsWith(containsString("Must contain a 'asdf' property with at least one entry."));
     }
 
     @Test
@@ -314,35 +314,11 @@ public class ValidationUtilTest {
         });
     }
 
-    private void failsWith(final String... problems) {
-        if (context.getProblems().isEmpty()) {
-            Assert.fail("Expected there to be problems: " + Arrays.asList(problems));
-        }
-
-        final var actualProblems = context.getProblems();
-        final var actualNotFound = new HashSet<>(actualProblems);
-        final var expectNotFound = new HashSet<>(Arrays.asList(problems));
-
-        for (var expected : problems) {
-            for (var actual : actualProblems) {
-                if (actual.contains(expected)) {
-                    expectNotFound.remove(expected);
-                    actualNotFound.remove(actual);
-                    break;
-                }
-            }
-        }
-
-        if (!expectNotFound.isEmpty()) {
-            fail(String.format("Expected problems not found. Actual: %s; Missing: %s", actualProblems, expectNotFound));
-        }
-        if (!actualNotFound.isEmpty()) {
-            fail(String.format("Unexpected problems found: %s", actualNotFound));
-        }
+    @SafeVarargs
+    private void failsWith(final Matcher<String>... problems) {
+        assertThat(context.getProblems(), containsInAnyOrder(problems));
     }
 
-    private String resourceId(final String id) {
-        return ROOT_RESOURCE + "/" + id;
-    }
+
 
 }

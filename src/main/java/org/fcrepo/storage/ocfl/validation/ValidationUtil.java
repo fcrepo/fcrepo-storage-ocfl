@@ -120,19 +120,6 @@ final class ValidationUtil {
     }
 
     /**
-     * Validates that a string is a valid Fedora ID and returns a validation error string if it is not.
-     *
-     * @param name the property name the string came from, eg 'id', used in validation errors
-     * @param value the id to validate
-     * @return validation error string or null
-     */
-    public static String validateId(final String name, final String value) {
-        final var context = new Context();
-        validateId(context, name, value);
-        return context.getProblems().stream().findFirst().orElse(null);
-    }
-
-    /**
      * Validates that to Fedora IDs are related to each other. That is to say that one ID contains the other.
      * If either are null, the validation is skipped.
      *
@@ -150,7 +137,7 @@ final class ValidationUtil {
         if (parentValue != null && childValue != null) {
             final var parentWithSlash = parentValue.endsWith("/") ? parentValue : parentValue + "/";
             if (!(childValue.equals(parentValue) || childValue.startsWith(parentWithSlash))) {
-                context.problem("IDs that must be related: %s=%s; %s=%s.",
+                context.problem("IDs must be related: %s=%s; %s=%s.",
                         parentName, parentValue, childName, childValue);
             }
         }
