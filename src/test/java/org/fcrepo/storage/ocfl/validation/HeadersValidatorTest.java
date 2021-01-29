@@ -511,7 +511,7 @@ public class HeadersValidatorTest {
     private void expectFailureRelaxed(final PersistencePaths paths,
                                       final ResourceHeaders headers,
                                       final ResourceHeaders rootHeaders,
-                                      Matcher<String>... matchers) {
+                                      final Matcher<String>... matchers) {
         try {
             validator.validate(paths, headers, rootHeaders);
             fail("Expected header validation to fail but it did not");

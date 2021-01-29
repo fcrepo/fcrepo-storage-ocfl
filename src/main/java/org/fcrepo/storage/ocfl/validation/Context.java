@@ -26,7 +26,7 @@ import java.util.Collection;
 /**
  * Validation context for collecting problems
  *
- * @pwinckles
+ * @author pwinckles
  */
 class Context {
 

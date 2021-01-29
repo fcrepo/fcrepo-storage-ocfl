@@ -204,7 +204,8 @@ public final class ResourceUtils {
         headers.withMimeType(RDF_MIME);
 
         if (content != null) {
-            headers.withContentPath(PersistencePaths.aclResource(describesRdf, parentId, resourceId).getContentFilePath());
+            headers.withContentPath(PersistencePaths.aclResource(describesRdf, parentId, resourceId)
+                    .getContentFilePath());
         }
 
         if (modifyHeaders != null) {
@@ -238,7 +239,8 @@ public final class ResourceUtils {
             headers.withArchivalGroupId(rootResourceId);
 
             if (content != null) {
-                headers.withContentPath(PersistencePaths.aclResource(describesRdf, rootResourceId, resourceId).getContentFilePath());
+                headers.withContentPath(PersistencePaths.aclResource(describesRdf, rootResourceId, resourceId)
+                        .getContentFilePath());
             }
 
             if (modifyHeaders != null) {

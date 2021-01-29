@@ -206,7 +206,8 @@ public class ObjectValidatorTest {
                 ResourceUtils.partContainer(rdfChildId, defaultId, defaultId, "rdf"),
 
                 ResourceUtils.partBinary(binGrandChildId, rdfChildId, defaultId, "bin2"),
-                ResourceUtils.partDesc(ResourceUtils.toDescId(binGrandChildId), binGrandChildId, defaultId, "bin2 desc"));
+                ResourceUtils.partDesc(ResourceUtils.toDescId(binGrandChildId), binGrandChildId, defaultId,
+                        "bin2 desc"));
 
         objectValidator.validate(defaultId, true);
     }
@@ -1049,7 +1050,7 @@ public class ObjectValidatorTest {
         session.commit();
     }
 
-    private void modifyHeaders(final Path path, Consumer<ResourceHeaders.Builder> modifyHeaders) {
+    private void modifyHeaders(final Path path, final Consumer<ResourceHeaders.Builder> modifyHeaders) {
         try {
             final var headers = objectMapper.readValue(path.toFile(), ResourceHeaders.class);
             final var builder = ResourceHeaders.builder(headers);

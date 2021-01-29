@@ -19,6 +19,9 @@
     <project_name>${project.artifactId}</project_name>
     <release.plugin.version>2.5.2</release.plugin.version>
     <scm-provider-gitexe.plugin.version>1.9.4</scm-provider-gitexe.plugin.version>
+    <checkstyle.plugin.version>3.1.1</checkstyle.plugin.version>
+    <source.plugin.version>3.0.1</source.plugin.version>
+    <javadoc.plugin.version>3.2.0</javadoc.plugin.version>
   </properties>
 
   <scm>
@@ -33,14 +36,49 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>
+        <version>${checkstyle.plugin.version}</version>
+        <dependencies>
+          <dependency>
+            <groupId>org.fcrepo</groupId>
+            <artifactId>fcrepo-build-tools</artifactId>
+            <version>${fcrepo-build-tools.version}</version>
+          </dependency>
+          <!-- Override dependencies to use latest version of checkstyle -->
+          <dependency>
+            <groupId>com.puppycrawl.tools</groupId>
+            <artifactId>checkstyle</artifactId>
+            <version>8.34</version>
+          </dependency>
+        </dependencies>
+        <configuration>
+          <includeTestSourceDirectory>true</includeTestSourceDirectory>
+          <consoleOutput>true</consoleOutput>
+          <logViolationsToConsole>true</logViolationsToConsole>
+          <failsOnError>true</failsOnError>
+          <failOnViolation>true</failOnViolation>
+          <violationSeverity>warning</violationSeverity>
+          <configLocation>fcrepo-checkstyle/checkstyle.xml</configLocation>
+          <suppressionsLocation>fcrepo-checkstyle/checkstyle-suppressions.xml</suppressionsLocation>
+        </configuration>
+        <executions>
+          <execution>
+            <id>checkstyle</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
+        <version>${javadoc.plugin.version}</version>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-source-plugin</artifactId>
+        <version>${source.plugin.version}</version>
       </plugin>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
