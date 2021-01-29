@@ -1077,7 +1077,8 @@ public class DefaultOcflObjectSessionTest {
         close(ag);
         close(binary);
 
-        final var binaryUpdate = ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "updated!");
+        final var binaryUpdate = ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID,
+                DEFAULT_AG_ID, DEFAULT_AG_ID, "updated!");
 
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
         write(session, binaryUpdate);

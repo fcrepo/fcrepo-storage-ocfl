@@ -167,7 +167,8 @@ public class ObjectValidator {
                             resourceParentMap.put(headers.getId(), headers.getParent());
                         }
 
-                        if (ValidationUtil.isModel(InteractionModel.NON_RDF_DESCRIPTION, headers.getInteractionModel())) {
+                        if (ValidationUtil.isModel(InteractionModel.NON_RDF_DESCRIPTION,
+                                headers.getInteractionModel())) {
                             nonRdfDescriptions.add(headers.getId());
                         } else if (ValidationUtil.isModel(InteractionModel.NON_RDF, headers.getInteractionModel())) {
                             nonRdfResources.add(headers.getId());

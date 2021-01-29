@@ -117,13 +117,16 @@ public class ValidationUtilTest {
         FORBIDDEN_PARTS.forEach(part -> {
             ValidationUtil.validateId(context, "id", String.format(tmpl, part));
         });
-        failsWith(containsString("Invalid 'id' value 'info:fedora/a/fcr-root/b'. IDs may not contain parts equal to 'fcr-root'"),
-                containsString("Invalid 'id' value 'info:fedora/a/fcr:versions/b'. IDs may not contain parts equal to 'fcr:versions'"),
-                containsString("Invalid 'id' value 'info:fedora/a/.fcrepo/b'. IDs may not contain parts equal to '.fcrepo'"),
-                containsString("Invalid 'id' value 'info:fedora/a/fcr-container.nt/b'. IDs may not contain parts equal" +
-                        " to 'fcr-container.nt'"),
-                containsString("Invalid 'id' value 'info:fedora/a/fcr:tombstone/b'. IDs may not contain parts equal to" +
-                        " 'fcr:tombstone'"));
+        failsWith(containsString("Invalid 'id' value 'info:fedora/a/fcr-root/b'." +
+                        " IDs may not contain parts equal to 'fcr-root'"),
+                containsString("Invalid 'id' value 'info:fedora/a/fcr:versions/b'." +
+                        " IDs may not contain parts equal to 'fcr:versions'"),
+                containsString("Invalid 'id' value 'info:fedora/a/.fcrepo/b'." +
+                        " IDs may not contain parts equal to '.fcrepo'"),
+                containsString("Invalid 'id' value 'info:fedora/a/fcr-container.nt/b'." +
+                        " IDs may not contain parts equal to 'fcr-container.nt'"),
+                containsString("Invalid 'id' value 'info:fedora/a/fcr:tombstone/b'." +
+                        " IDs may not contain parts equal to 'fcr:tombstone'"));
     }
 
     @Test
@@ -132,11 +135,14 @@ public class ValidationUtilTest {
         FORBIDDEN_SUFFIXES.forEach(part -> {
             ValidationUtil.validateId(context, "id", String.format(tmpl, part));
         });
-        failsWith(containsString("Invalid 'id' value 'info:fedora/a/b/c~fcr-acl.nt'. IDs may not contain parts that end with '~fcr-acl.nt'"),
-                containsString("Invalid 'id' value 'info:fedora/a/b/c~fcr-desc'. IDs may not contain parts that end with '~fcr-desc'"),
-                containsString("Invalid 'id' value 'info:fedora/a/b/c~fcr-desc.nt'. IDs may not contain parts that end" +
-                        " with '~fcr-desc.nt'"),
-                containsString("Invalid 'id' value 'info:fedora/a/b/c~fcr-acl'. IDs may not contain parts that end with '~fcr-acl'"));
+        failsWith(containsString("Invalid 'id' value 'info:fedora/a/b/c~fcr-acl.nt'." +
+                        " IDs may not contain parts that end with '~fcr-acl.nt'"),
+                containsString("Invalid 'id' value 'info:fedora/a/b/c~fcr-desc'." +
+                        " IDs may not contain parts that end with '~fcr-desc'"),
+                containsString("Invalid 'id' value 'info:fedora/a/b/c~fcr-desc.nt'." +
+                        " IDs may not contain parts that end with '~fcr-desc.nt'"),
+                containsString("Invalid 'id' value 'info:fedora/a/b/c~fcr-acl'." +
+                        " IDs may not contain parts that end with '~fcr-acl'"));
     }
 
     @Test
