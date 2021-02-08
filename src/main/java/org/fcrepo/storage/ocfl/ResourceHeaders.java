@@ -56,10 +56,12 @@ public class ResourceHeaders {
     private final String createdBy;
     private final Instant lastModifiedDate;
     private final String lastModifiedBy;
+    private final Instant mementoCreatedDate;
     private final boolean archivalGroup;
     private final boolean objectRoot;
     private final boolean deleted;
     private final String contentPath;
+    private final String headersVersion;
 
     public static Builder builder() {
         return new Builder();
@@ -85,31 +87,35 @@ public class ResourceHeaders {
                 builder.createdBy,
                 builder.lastModifiedDate,
                 builder.lastModifiedBy,
+                builder.mementoCreatedDate,
                 builder.archivalGroup,
                 builder.objectRoot,
                 builder.deleted,
-                builder.contentPath);
+                builder.contentPath,
+                builder.headersVersion);
     }
 
     private ResourceHeaders(final String id,
-                           final String parent,
-                           final String archivalGroupId,
-                           final String stateToken,
-                           final String interactionModel,
-                           final String mimeType,
-                           final String filename,
-                           final long contentSize,
-                           final Collection<URI> digests,
-                           final String externalUrl,
-                           final String externalHandling,
-                           final Instant createdDate,
-                           final String createdBy,
-                           final Instant lastModifiedDate,
-                           final String lastModifiedBy,
-                           final boolean archivalGroup,
-                           final boolean objectRoot,
-                           final boolean deleted,
-                           final String contentPath) {
+                            final String parent,
+                            final String archivalGroupId,
+                            final String stateToken,
+                            final String interactionModel,
+                            final String mimeType,
+                            final String filename,
+                            final long contentSize,
+                            final Collection<URI> digests,
+                            final String externalUrl,
+                            final String externalHandling,
+                            final Instant createdDate,
+                            final String createdBy,
+                            final Instant lastModifiedDate,
+                            final String lastModifiedBy,
+                            final Instant mementoCreatedDate,
+                            final boolean archivalGroup,
+                            final boolean objectRoot,
+                            final boolean deleted,
+                            final String contentPath,
+                            final String headersVersion) {
         this.id = id;
         this.parent = parent;
         this.archivalGroupId = archivalGroupId;
@@ -136,10 +142,12 @@ public class ResourceHeaders {
         this.createdBy = createdBy;
         this.lastModifiedDate = lastModifiedDate;
         this.lastModifiedBy = lastModifiedBy;
+        this.mementoCreatedDate = mementoCreatedDate;
         this.archivalGroup = archivalGroup;
         this.objectRoot = objectRoot;
         this.deleted = deleted;
         this.contentPath = contentPath;
+        this.headersVersion = headersVersion;
     }
 
     /**
@@ -243,6 +251,13 @@ public class ResourceHeaders {
     }
 
     /**
+     * @return the timestamp when the memento was created
+     */
+    public Instant getMementoCreatedDate() {
+        return mementoCreatedDate;
+    }
+
+    /**
      * @return the externalUrl
      */
     public String getExternalUrl() {
@@ -281,6 +296,13 @@ public class ResourceHeaders {
         return contentPath;
     }
 
+    /**
+     * @return the version identifier of the headers file
+     */
+    public String getHeadersVersion() {
+        return headersVersion;
+    }
+
     @Override
     public String toString() {
         return "ResourceHeaders{" +
@@ -299,10 +321,12 @@ public class ResourceHeaders {
                 ", createdBy='" + createdBy + '\'' +
                 ", lastModifiedDate=" + lastModifiedDate +
                 ", lastModifiedBy='" + lastModifiedBy + '\'' +
+                ", mementoCreatedDate=" + mementoCreatedDate +
                 ", archivalGroup=" + archivalGroup +
                 ", objectRoot=" + objectRoot +
                 ", deleted=" + deleted +
                 ", contentPath='" + contentPath + '\'' +
+                ", headersVersion='" + headersVersion + '\'' +
                 '}';
     }
 
@@ -333,7 +357,9 @@ public class ResourceHeaders {
                 Objects.equals(createdBy, that.createdBy) &&
                 Objects.equals(lastModifiedDate, that.lastModifiedDate) &&
                 Objects.equals(lastModifiedBy, that.lastModifiedBy) &&
-                Objects.equals(contentPath, that.contentPath);
+                Objects.equals(mementoCreatedDate, that.mementoCreatedDate) &&
+                Objects.equals(contentPath, that.contentPath) &&
+                Objects.equals(headersVersion, that.headersVersion);
     }
 
     @Override
@@ -342,8 +368,8 @@ public class ResourceHeaders {
                 interactionModel, mimeType, filename,
                 contentSize, digests, externalUrl,
                 externalHandling, createdDate, createdBy,
-                lastModifiedDate, lastModifiedBy, archivalGroup,
-                objectRoot, deleted, contentPath);
+                lastModifiedDate, lastModifiedBy, mementoCreatedDate,
+                archivalGroup, objectRoot, deleted, contentPath, headersVersion);
     }
 
     /**
@@ -367,10 +393,12 @@ public class ResourceHeaders {
         private String createdBy;
         private Instant lastModifiedDate;
         private String lastModifiedBy;
+        private Instant mementoCreatedDate;
         private boolean archivalGroup;
         private boolean objectRoot;
         private boolean deleted;
         private String contentPath;
+        private String headersVersion;
 
         public Builder() {
 
@@ -392,10 +420,12 @@ public class ResourceHeaders {
             this.createdBy = original.getCreatedBy();
             this.lastModifiedDate = original.getLastModifiedDate();
             this.lastModifiedBy = original.getLastModifiedBy();
+            this.mementoCreatedDate = original.getMementoCreatedDate();
             this.archivalGroup = original.isArchivalGroup();
             this.objectRoot = original.isObjectRoot();
             this.deleted = original.isDeleted();
             this.contentPath = original.getContentPath();
+            this.headersVersion = original.getHeadersVersion();
         }
 
         public Builder withId(final String id) {
@@ -481,6 +511,11 @@ public class ResourceHeaders {
             return this;
         }
 
+        public Builder withMementoCreatedDate(final Instant mementoCreatedDate) {
+            this.mementoCreatedDate = mementoCreatedDate;
+            return this;
+        }
+
         public Builder withArchivalGroup(final boolean archivalGroup) {
             this.archivalGroup = archivalGroup;
             return this;
@@ -498,6 +533,11 @@ public class ResourceHeaders {
 
         public Builder withContentPath(final String contentPath) {
             this.contentPath = contentPath;
+            return this;
+        }
+
+        public Builder withHeadersVersion(final String headersVersion) {
+            this.headersVersion = headersVersion;
             return this;
         }
 

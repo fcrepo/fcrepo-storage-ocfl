@@ -604,27 +604,26 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                 && !Objects.equals(rootResourceId(), headers.getId())
                 && !InteractionModel.ACL.getUri().equals(headers.getInteractionModel())) {
             LOG.debug("Touching AG {} after updating {}", rootResourceId(), headers.getId());
-            touchResource(rootResourceId(), headers.getLastModifiedDate(), headers.getStateToken());
+            touchResource(rootResourceId(), headers.getLastModifiedDate());
         }
 
         if (InteractionModel.NON_RDF_DESCRIPTION.getUri().equals(headers.getInteractionModel())) {
             LOG.debug("Touching binary {} after updating {}", headers.getParent(), headers.getId());
-            touchResource(headers.getParent(), headers.getLastModifiedDate(), headers.getStateToken());
+            touchResource(headers.getParent(), headers.getLastModifiedDate());
         } else if (InteractionModel.NON_RDF.getUri().equals(headers.getInteractionModel())) {
             final var descriptionId = headers.getId() + "/" + PersistencePaths.FCR_METADATA;
             LOG.debug("Touching binary description {} after updating {}", descriptionId, headers.getId());
             try {
-                touchResource(descriptionId, headers.getLastModifiedDate(), headers.getStateToken());
+                touchResource(descriptionId, headers.getLastModifiedDate());
             } catch (final NotFoundException e) {
                 // Ignore this exception because it just means that the binary description hasn't been created yet
             }
         }
     }
 
-    private void touchResource(final String resourceId, final Instant timestamp, final String stateToken) {
+    private void touchResource(final String resourceId, final Instant timestamp) {
         final var headers = ResourceHeaders.builder(readHeaders(resourceId))
-                .withLastModifiedDate(timestamp)
-                .withStateToken(stateToken)
+                .withMementoCreatedDate(timestamp)
                 .build();
 
         final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));

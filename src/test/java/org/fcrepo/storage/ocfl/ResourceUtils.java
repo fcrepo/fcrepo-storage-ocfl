@@ -305,6 +305,7 @@ public final class ResourceUtils {
                                                    final String parentId,
                                                    final String content) {
         final var headers = ResourceHeaders.builder();
+        headers.withHeadersVersion(ResourceHeadersVersion.V1_0);
         headers.withId(resourceId);
         headers.withParent(parentId);
         headers.withCreatedBy(DEFAULT_USER);

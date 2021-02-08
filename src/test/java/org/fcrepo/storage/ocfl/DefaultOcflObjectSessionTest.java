@@ -64,6 +64,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -1258,7 +1259,8 @@ public class DefaultOcflObjectSessionTest {
         session2.commit();
 
         final var agHeaders = session2.readHeaders(DEFAULT_AG_ID);
-        assertEquals(timestamp, agHeaders.getLastModifiedDate());
+        assertEquals(timestamp, agHeaders.getMementoCreatedDate());
+        assertNotEquals(timestamp, agHeaders.getLastModifiedDate());
     }
 
     @Test
@@ -1558,19 +1560,18 @@ public class DefaultOcflObjectSessionTest {
     }
 
     /**
-     * Align the lastModifiedDate and stateToken to that of the related headers.
-     * @param modifiedResource the resource to modify
-     * @param relatedHeaders the resource headers to use for the modifying values.
-     * @return the modifiedResource with new lastModifiedDate and stateToken headers.
+     * Touch the mementoCreatedDate in th related resource so that it has a memento created
+     * @param related the resource that's related to the modified resource
+     * @param modified the resource that was modified
+     * @return the updated headers
      */
-    private ResourceContent touch(final ResourceContent modifiedResource, final ResourceHeaders relatedHeaders) {
-        final var newHeaders = ResourceHeaders.builder(modifiedResource.getHeaders())
-                .withLastModifiedDate(relatedHeaders.getLastModifiedDate())
-                .withStateToken(relatedHeaders.getStateToken()).build();
-        return new ResourceContent(modifiedResource.getContentStream(), newHeaders);
+    private ResourceContent touch(final ResourceContent related, final ResourceHeaders modified) {
+        final var newHeaders = ResourceHeaders.builder(related.getHeaders())
+                .withMementoCreatedDate(modified.getLastModifiedDate()).build();
+        return new ResourceContent(related.getContentStream(), newHeaders);
     }
 
-    private ResourceContent touch(final ResourceContent modifiedResource, final ResourceContent relatedResource) {
-        return touch(modifiedResource, relatedResource.getHeaders());
+    private ResourceContent touch(final ResourceContent related, final ResourceContent modified) {
+        return touch(related, modified.getHeaders());
     }
 }
