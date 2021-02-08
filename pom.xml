@@ -22,6 +22,7 @@
     <checkstyle.plugin.version>3.1.1</checkstyle.plugin.version>
     <source.plugin.version>3.0.1</source.plugin.version>
     <javadoc.plugin.version>3.2.0</javadoc.plugin.version>
+    <ocfl-java.version>1.0.1</ocfl-java.version>
   </properties>
 
   <scm>
@@ -153,7 +154,7 @@
     <dependency>
       <groupId>edu.wisc.library.ocfl</groupId>
       <artifactId>ocfl-java-core</artifactId>
-      <version>0.2.0</version>
+      <version>${ocfl-java.version}</version>
       <exclusions>
         <exclusion>
           <groupId>com.github.ben-manes.caffeine</groupId>
