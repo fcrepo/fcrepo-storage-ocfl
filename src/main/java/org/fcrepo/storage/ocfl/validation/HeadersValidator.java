@@ -21,6 +21,7 @@ package org.fcrepo.storage.ocfl.validation;
 import org.fcrepo.storage.ocfl.InteractionModel;
 import org.fcrepo.storage.ocfl.PersistencePaths;
 import org.fcrepo.storage.ocfl.ResourceHeaders;
+import org.fcrepo.storage.ocfl.ResourceHeadersVersion;
 import org.fcrepo.storage.ocfl.exception.ValidationException;
 
 import java.util.Objects;
@@ -89,6 +90,8 @@ public class HeadersValidator {
                                          final PersistencePaths paths,
                                          final ResourceHeaders headers,
                                          final ResourceHeaders rootHeaders) {
+        ValidationUtil.requireValue(context, "headersVersion",
+                ResourceHeadersVersion.V1_0, headers.getHeadersVersion());
         ValidationUtil.validateId(context, "id", headers.getId());
         ValidationUtil.validateId(context, "parent", headers.getParent());
         ValidationUtil.validateIdRelationship(context, "parent", headers.getParent(),

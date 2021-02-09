@@ -507,6 +507,24 @@ public class HeadersValidatorTest {
                 containsString("Must define property 'id' as '" + defaultId + "/fcr:acl' but was '" + id));
     }
 
+    @Test
+    public void failWhenHeadersVersionNotSet() {
+        final var headers = ResourceUtils.atomicBinary(defaultId, ROOT_RESOURCE, "blah", h -> {
+            h.withHeadersVersion(null);
+        }).getHeaders();
+        expectFailureRelaxed(PersistencePaths.nonRdfResource(defaultId, defaultId), headers, headers,
+                containsString("Must define property 'headersVersion' as '1.0' but was 'null'"));
+    }
+
+    @Test
+    public void failWhenHeadersVersionInvalid() {
+        final var headers = ResourceUtils.atomicBinary(defaultId, ROOT_RESOURCE, "blah", h -> {
+            h.withHeadersVersion("2.5");
+        }).getHeaders();
+        expectFailureRelaxed(PersistencePaths.nonRdfResource(defaultId, defaultId), headers, headers,
+                containsString("Must define property 'headersVersion' as '1.0' but was '2.5'"));
+    }
+
     @SafeVarargs
     private void expectFailureRelaxed(final PersistencePaths paths,
                                       final ResourceHeaders headers,
