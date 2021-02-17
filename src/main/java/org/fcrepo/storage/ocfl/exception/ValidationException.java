@@ -60,7 +60,7 @@ public class ValidationException extends RuntimeException {
         return new ValidationException(ocflObjectId, null, problems);
     }
 
-    public ValidationException(final String ocflObjectId,
+    private ValidationException(final String ocflObjectId,
                                final String resourceId,
                                final Collection<String> problems) {
         this.ocflObjectId = ocflObjectId;
