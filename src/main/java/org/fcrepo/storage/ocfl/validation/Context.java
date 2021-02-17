@@ -73,7 +73,7 @@ class Context {
      */
     public void throwValidationException() {
         if (!problems.isEmpty()) {
-            throw new ValidationException(ocflObjectId, problems);
+            throw ValidationException.createForObject(ocflObjectId, problems);
         }
     }
 

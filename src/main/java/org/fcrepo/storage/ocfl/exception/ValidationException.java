@@ -28,17 +28,43 @@ import java.util.Objects;
  */
 public class ValidationException extends RuntimeException {
 
+    private final String resourceId;
     private final String ocflObjectId;
     private final Collection<String> problems;
 
     private String message;
 
-    public ValidationException(final Collection<String> problems) {
-        this(null, problems);
+    /**
+     * @param problems the validation problems
+     * @return validation exception
+     */
+    public static ValidationException create(final Collection<String> problems) {
+        return new ValidationException(null, null, problems);
     }
 
-    public ValidationException(final String ocflObjectId, final Collection<String> problems) {
+    /**
+     * @param resourceId the Fedora resource id that is invalid
+     * @param problems the validation problems
+     * @return validation exception
+     */
+    public static ValidationException createForResource(final String resourceId, final Collection<String> problems) {
+        return new ValidationException(null, resourceId, problems);
+    }
+
+    /**
+     * @param ocflObjectId the ocfl object id that is invalid
+     * @param problems the validation problems
+     * @return validation exception
+     */
+    public static ValidationException createForObject(final String ocflObjectId, final Collection<String> problems) {
+        return new ValidationException(ocflObjectId, null, problems);
+    }
+
+    public ValidationException(final String ocflObjectId,
+                               final String resourceId,
+                               final Collection<String> problems) {
         this.ocflObjectId = ocflObjectId;
+        this.resourceId = resourceId;
         this.problems = Objects.requireNonNull(problems, "problems cannot be null");
     }
 
@@ -49,6 +75,10 @@ public class ValidationException extends RuntimeException {
 
             if (ocflObjectId != null) {
                 builder.append("OCFL object ").append(ocflObjectId).append(" is not a valid Fedora 6 object. ");
+            }
+
+            if (resourceId != null) {
+                builder.append("Resource ").append(resourceId).append(" is not a valid Fedora 6 resource. ");
             }
 
             builder.append("The following problems were identified:");

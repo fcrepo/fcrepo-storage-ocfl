@@ -23,6 +23,8 @@ import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import edu.wisc.library.ocfl.api.MutableOcflRepository;
 import org.fcrepo.storage.ocfl.cache.Cache;
+import org.fcrepo.storage.ocfl.validation.DefaultHeadersValidator;
+import org.fcrepo.storage.ocfl.validation.HeadersValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,6 +50,7 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
     private final String defaultVersionMessage;
     private final String defaultVersionUserName;
     private final String defaultVersionUserAddress;
+    private HeadersValidator headersValidator;
 
     private boolean closed = false;
 
@@ -69,6 +72,7 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
         this.defaultVersionMessage = defaultVersionMessage;
         this.defaultVersionUserName = defaultVersionUserName;
         this.defaultVersionUserAddress = defaultVersionUserAddress;
+        this.headersValidator = new DefaultHeadersValidator();
     }
 
     @Override
@@ -84,7 +88,8 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
                 headerReader,
                 headerWriter,
                 defaultCommitType,
-                headersCache
+                headersCache,
+                headersValidator
         );
 
         session.versionAuthor(defaultVersionUserName, defaultVersionUserAddress);
@@ -116,4 +121,12 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
         this.defaultCommitType = Objects.requireNonNull(defaultCommitType, "defaultCommitType cannot be null");
     }
 
+    /**
+     * Changes the headers validator implementation for TESTING purposes.
+     *
+     * @param headersValidator the validator to use
+     */
+    public void setHeadersValidator(final HeadersValidator headersValidator) {
+        this.headersValidator = headersValidator;
+    }
 }

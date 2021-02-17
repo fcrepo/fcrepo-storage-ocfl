@@ -40,11 +40,11 @@ import static org.junit.Assert.fail;
 /**
  * @author pwinckles
  */
-public class HeadersValidatorTest {
+public class DefaultHeadersValidatorTest {
 
     private static final String ROOT_RESOURCE = "info:fedora";
 
-    private HeadersValidator validator;
+    private DefaultHeadersValidator validator;
 
     private String defaultId;
     private String defaultAclId;
@@ -54,7 +54,7 @@ public class HeadersValidatorTest {
 
     @Before
     public void setup() {
-        validator = new HeadersValidator();
+        validator = new DefaultHeadersValidator();
         defaultId = ResourceUtils.resourceId(UUID.randomUUID().toString());
         defaultAclId = ResourceUtils.toAclId(defaultId);
         defaultDescId = ResourceUtils.toDescId(defaultId);

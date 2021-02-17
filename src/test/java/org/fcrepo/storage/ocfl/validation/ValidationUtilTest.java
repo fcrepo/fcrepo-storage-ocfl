@@ -146,6 +146,15 @@ public class ValidationUtilTest {
     }
 
     @Test
+    public void validateIdDoesNotFailWhenIllegalSuffixEntirePart() {
+        final var tmpl = ResourceUtils.resourceId("a/b/%s");
+        FORBIDDEN_SUFFIXES.forEach(part -> {
+            ValidationUtil.validateId(context, "id", String.format(tmpl, part));
+        });
+        context.throwValidationException();
+    }
+
+    @Test
     public void validateValidateId() {
         ValidationUtil.validateId(context, "id", ResourceUtils.resourceId("hello"));
         context.throwValidationException();
