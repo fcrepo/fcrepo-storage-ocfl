@@ -35,6 +35,7 @@ import org.fcrepo.storage.ocfl.cache.CaffeineCache;
 import org.fcrepo.storage.ocfl.cache.NoOpCache;
 import org.fcrepo.storage.ocfl.exception.InvalidContentException;
 import org.fcrepo.storage.ocfl.exception.NotFoundException;
+import org.fcrepo.storage.ocfl.exception.ValidationException;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -65,7 +66,6 @@ import static org.hamcrest.Matchers.empty;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -812,23 +812,14 @@ public class DefaultOcflObjectSessionTest {
         assertResourceContent(contentStr2, content2, committedContent2);
     }
 
-    @Test
-    public void writeFileWithNullContent() {
+    @Test(expected = ValidationException.class)
+    public void failWriteFileWithNullContentNotExternal() {
         final var resourceId = "info:fedora/foo";
         final var session = sessionFactory.newSession(resourceId);
 
         final var content = ResourceUtils.atomicBinary(resourceId, ROOT, null);
 
         write(session, content);
-
-        final var stagedContent = session.readContent(resourceId);
-        assertResourceContent(null, content, stagedContent);
-
-        session.commit();
-
-        final var committedContent = session.readContent(resourceId);
-        assertResourceContent(null, content, committedContent);
-        assertNull(content.getHeaders().getContentPath());
     }
 
     @Test
@@ -1101,15 +1092,16 @@ public class DefaultOcflObjectSessionTest {
 
         final var session = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        session.deleteContentFile(binary.getHeaders());
-        // Match ag lastmodified and state token to binary child.
-        final var correctAg1 = touch(ag, binary);
-
         final var deleteHeaders = ResourceHeaders.builder(binary.getHeaders())
+                .withDeleted(true)
                 .withContentPath(null)
                 .withContentSize(-1)
                 .withDigests(null)
                 .build();
+
+        session.deleteContentFile(deleteHeaders);
+        // Match ag lastmodified and state token to binary child.
+        final var correctAg1 = touch(ag, binary);
 
         final var resources = listHeaders(session);
         assertHeaders(resources, correctAg1.getHeaders(), deleteHeaders);
@@ -1169,7 +1161,9 @@ public class DefaultOcflObjectSessionTest {
 
         final var session2 = sessionFactory.newSession(resourceId);
 
-        session2.deleteContentFile(content.getHeaders());
+        session2.deleteContentFile(ResourceHeaders.builder(content.getHeaders())
+                .withDeleted(true)
+                .build());
 
         assertTrue(session2.containsResource(resourceId));
     }
@@ -1271,7 +1265,7 @@ public class DefaultOcflObjectSessionTest {
         assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
 
         final var resourceId = DEFAULT_AG_ID + "/fcr:acl";
-        final var content = ResourceUtils.atomicContainerAcl(resourceId, DEFAULT_AG_ID, "blah");
+        final var content = ResourceUtils.partContainerAcl(resourceId, DEFAULT_AG_ID, DEFAULT_AG_ID,"blah");
 
         write(session, content);
         session.commit();
@@ -1479,6 +1473,19 @@ public class DefaultOcflObjectSessionTest {
         final var correctAg = touch(ag, deleteHeaders);
         final var resources = listHeaders(session);
         assertHeaders(resources, correctAg.getHeaders(), deleteHeaders);
+    }
+
+    @Test(expected = ValidationException.class)
+    public void failWhenInvalidResourceHeaders() {
+        final var resourceId = "info:fedora/foo";
+        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "bar", headers -> {
+            headers.withArchivalGroup(true);
+        });
+
+        final var session = sessionFactory.newSession(resourceId);
+
+        write(session, content);
+        session.commit();
     }
 
     private void assertResourceContent(final String content,

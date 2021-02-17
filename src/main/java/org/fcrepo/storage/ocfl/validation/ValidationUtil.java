@@ -107,7 +107,7 @@ final class ValidationUtil {
                                 name, value, part);
                     } else {
                         for (var suffix : FORBIDDEN_SUFFIXES) {
-                            if (part.endsWith(suffix)) {
+                            if (part.endsWith(suffix) && !part.equals(suffix)) {
                                 context.problem("Invalid '%s' value '%s'. IDs may not contain parts that end with '%s'",
                                         name, value, suffix);
                                 break;

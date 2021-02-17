@@ -55,13 +55,19 @@ public class ObjectValidator {
 
     private final MutableOcflRepository ocflRepo;
     private final ObjectReader headerReader;
-    private final HeadersValidator headersValidator;
+    private final DefaultHeadersValidator headersValidator;
 
+    /**
+     * Creates a new object validator
+     *
+     * @param ocflRepo the ocfl repository
+     * @param headerReader the resourece header deserializer
+     */
     public ObjectValidator(final MutableOcflRepository ocflRepo,
                            final ObjectReader headerReader) {
         this.ocflRepo = Objects.requireNonNull(ocflRepo, "ocflRepo cannot be null");
         this.headerReader = Objects.requireNonNull(headerReader, "headerReader cannot be null");
-        this.headersValidator = new HeadersValidator();
+        this.headersValidator = new DefaultHeadersValidator();
     }
 
     /**

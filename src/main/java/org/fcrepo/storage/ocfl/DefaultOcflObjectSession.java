@@ -35,6 +35,8 @@ import org.apache.commons.lang3.SystemUtils;
 import org.fcrepo.storage.ocfl.cache.Cache;
 import org.fcrepo.storage.ocfl.exception.InvalidContentException;
 import org.fcrepo.storage.ocfl.exception.NotFoundException;
+import org.fcrepo.storage.ocfl.exception.ValidationException;
+import org.fcrepo.storage.ocfl.validation.HeadersValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -93,6 +95,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private final ObjectReader headerReader;
     private final ObjectWriter headerWriter;
     private final Cache<String, ResourceHeaders> headersCache;
+    private final HeadersValidator headersValidator;
 
     private final DigestAlgorithm digestAlgorithm;
     private final OcflOption[] ocflOptions;
@@ -116,7 +119,8 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                                     final ObjectReader headerReader,
                                     final ObjectWriter headerWriter,
                                     final CommitType commitType,
-                                    final Cache<String, ResourceHeaders> headersCache) {
+                                    final Cache<String, ResourceHeaders> headersCache,
+                                    final HeadersValidator headersValidator) {
         this.sessionId = Objects.requireNonNull(sessionId, "sessionId cannot be null");
         this.ocflRepo = Objects.requireNonNull(ocflRepo, "ocflRepo cannot be null");
         this.ocflObjectId = Objects.requireNonNull(ocflObjectId, "ocflObjectId cannot be null");
@@ -125,6 +129,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         this.headerWriter = Objects.requireNonNull(headerWriter, "headerWriter cannot be null");
         this.commitType = Objects.requireNonNull(commitType, "commitType cannot be null");
         this.headersCache = Objects.requireNonNull(headersCache, "headersCache cannot be null");
+        this.headersValidator = Objects.requireNonNull(headersValidator, "headersValidator cannot be null");
 
         this.versionInfo = new VersionInfo();
         this.deletePaths = new HashSet<>();
@@ -196,7 +201,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
             final var finalHeaders = headersBuilder.build();
 
-            writeHeaders(finalHeaders, headerDst);
+            writeHeaders(finalHeaders, headerDst, paths);
             touchRelatedResources(finalHeaders);
 
             return finalHeaders;
@@ -218,16 +223,18 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
         deletePaths.remove(headerPath);
 
-        writeHeaders(headers, headerDst);
+        writeHeaders(headers, headerDst, paths);
         touchRelatedResources(headers);
     }
 
     @Override
     public synchronized void deleteContentFile(final ResourceHeaders headers) {
         enforceOpen();
+        ensureKnownRootResource();
 
         final var resourceId = headers.getId();
-        final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));
+        final var paths = resolvePersistencePaths(headers);
+        final var headerPath = encode(paths.getHeaderFilePath());
 
         if (newInSession(headerPath)) {
             deleteResource(resourceId);
@@ -247,7 +254,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                     .build();
 
             final var headerDst = createStagingPath(headerPath);
-            writeHeaders(finalHeaders, headerDst);
+            writeHeaders(finalHeaders, headerDst, paths);
             touchRelatedResources(finalHeaders);
         }
     }
@@ -255,6 +262,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     @Override
     public synchronized void deleteResource(final String resourceId) {
         enforceOpen();
+        ensureKnownRootResource();
 
         if (Objects.equals(rootResourceId(), resourceId)) {
             deleteObject = true;
@@ -312,6 +320,8 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     @Override
     public ResourceHeaders readHeaders(final String resourceId, final String versionNumber) {
+        ensureKnownRootResource();
+
         if (versionNumber == null && stagedHeaders.containsKey(resourceId)) {
             return stagedHeaders.get(resourceId);
         }
@@ -338,6 +348,8 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     @Override
     public ResourceContent readContent(final String resourceId, final String versionNumber) {
+        ensureKnownRootResource();
+
         final var headers = readHeaders(resourceId, versionNumber);
         Optional<InputStream> contentStream = Optional.empty();
         if (headers.getContentPath() != null) {
@@ -589,12 +601,31 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         }
     }
 
-    private void writeHeaders(final ResourceHeaders headers, final Path destination) {
+    private void writeHeaders(final ResourceHeaders headers, final Path destination, final PersistencePaths paths) {
+        validateHeaders(headers, paths);
+        writeHeadersNoValidation(headers, destination);
+    }
+
+    private void writeHeadersNoValidation(final ResourceHeaders headers, final Path destination) {
         try {
             headerWriter.writeValue(destination.toFile(), headers);
             stagedHeaders.put(headers.getId(), headers);
         } catch (final IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    private void validateHeaders(final ResourceHeaders headers, final PersistencePaths paths) {
+        final var rootResourceId = rootResourceId();
+
+        try {
+            if (Objects.equals(headers.getId(), rootResourceId)) {
+                headersValidator.validate(paths, headers, headers);
+            } else {
+                headersValidator.validate(paths, headers, readHeaders(rootResourceId));
+            }
+        } catch (ValidationException e) {
+            throw ValidationException.createForResource(headers.getId(), e.getProblems());
         }
     }
 
@@ -629,7 +660,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));
         final var headerDst = createStagingPath(headerPath);
 
-        writeHeaders(headers, headerDst);
+        writeHeadersNoValidation(headers, headerDst);
     }
 
     private Consumer<OcflObjectUpdater> createObjectUpdater() {
@@ -747,10 +778,14 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
      * @throws NotFoundException if there is no known root resource
      */
     private String rootResourceId() {
-        if (rootResourceId != null) {
-            return rootResourceId;
+        ensureKnownRootResource();
+        return rootResourceId;
+    }
+
+    private void ensureKnownRootResource() {
+        if (rootResourceId == null) {
+            throw new NotFoundException("No resource found in object " + ocflObjectId);
         }
-        throw new NotFoundException("No resource found in object " + ocflObjectId);
     }
 
     private PathPair encode(final String value) {

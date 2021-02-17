@@ -32,7 +32,6 @@ import org.apache.commons.lang3.SystemUtils;
 import org.fcrepo.storage.ocfl.CommitType;
 import org.fcrepo.storage.ocfl.DefaultOcflObjectSessionFactory;
 import org.fcrepo.storage.ocfl.InteractionModel;
-import org.fcrepo.storage.ocfl.OcflObjectSessionFactory;
 import org.fcrepo.storage.ocfl.PersistencePaths;
 import org.fcrepo.storage.ocfl.ResourceContent;
 import org.fcrepo.storage.ocfl.ResourceHeaders;
@@ -80,7 +79,7 @@ public class ObjectValidatorTest {
     private Path ocflRoot;
 
     private MutableOcflRepository ocflRepo;
-    private OcflObjectSessionFactory sessionFactory;
+    private DefaultOcflObjectSessionFactory sessionFactory;
     private ObjectMapper objectMapper;
 
     private ObjectValidator objectValidator;
@@ -117,6 +116,7 @@ public class ObjectValidatorTest {
                 objectMapper,
                 new NoOpCache<>(),
                 CommitType.NEW_VERSION, DEFAULT_MESSAGE, DEFAULT_USER, DEFAULT_ADDRESS);
+        sessionFactory.setHeadersValidator(new NoOpHeadersValidator());
 
         objectValidator = new ObjectValidator(ocflRepo, objectMapper.readerFor(ResourceHeaders.class));
 
