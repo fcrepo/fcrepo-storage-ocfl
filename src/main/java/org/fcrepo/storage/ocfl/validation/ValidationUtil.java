@@ -23,6 +23,7 @@ import org.fcrepo.storage.ocfl.InteractionModel;
 import org.fcrepo.storage.ocfl.ResourceHeaders;
 
 import java.net.URI;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.Set;
@@ -34,6 +35,12 @@ final class ValidationUtil {
 
     private static final String INFO_FEDORA = "info:fedora";
     private static final String INFO_FEDORA_PREFIX = INFO_FEDORA + "/";
+    private static final String FCR_PREFIX = "fcr:";
+
+    private static final Set<String> ALLOWED_FCR_PARTS = Set.of(
+            "fcr:metadata",
+            "fcr:acl"
+    );
 
     private static final Set<String> FORBIDDEN_PARTS = Set.of(
             "fcr-root",
@@ -97,22 +104,38 @@ final class ValidationUtil {
 
             final var parts = value.split("/");
 
-            for (var part : parts) {
+            for (final var it = Arrays.asList(parts).iterator(); it.hasNext();) {
+                final var part = it.next();
+
                 if (StringUtils.isBlank(part)) {
                     context.problem("Invalid '%s' value '%s'. IDs may not contain blank parts",
                             name, value);
-                } else {
-                    if (FORBIDDEN_PARTS.contains(part)) {
-                        context.problem("Invalid '%s' value '%s'. IDs may not contain parts equal to '%s'",
-                                name, value, part);
-                    } else {
-                        for (var suffix : FORBIDDEN_SUFFIXES) {
-                            if (part.endsWith(suffix) && !part.equals(suffix)) {
-                                context.problem("Invalid '%s' value '%s'. IDs may not contain parts that end with '%s'",
-                                        name, value, suffix);
-                                break;
-                            }
-                        }
+                    break;
+                }
+
+                if (FORBIDDEN_PARTS.contains(part)) {
+                    context.problem("Invalid '%s' value '%s'. IDs may not contain parts equal to '%s'",
+                            name, value, part);
+                    break;
+                }
+
+                if (part.startsWith(FCR_PREFIX) && !ALLOWED_FCR_PARTS.contains(part)) {
+                    context.problem("Invalid '%s' value '%s'. IDs may not contain parts prefixed with 'fcr:'",
+                            name, value, part);
+                    break;
+                }
+
+                if (ALLOWED_FCR_PARTS.contains(part) && it.hasNext()) {
+                    context.problem("Invalid '%s' value '%s'. IDs may not have a part following '%s'",
+                            name, value, part);
+                    break;
+                }
+
+                for (var suffix : FORBIDDEN_SUFFIXES) {
+                    if (part.endsWith(suffix) && !part.equals(suffix)) {
+                        context.problem("Invalid '%s' value '%s'. IDs may not contain parts that end with '%s'",
+                                name, value, suffix);
+                        break;
                     }
                 }
             }
