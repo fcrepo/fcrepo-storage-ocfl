@@ -3,7 +3,7 @@
 
   <groupId>org.fcrepo</groupId>
   <artifactId>fcrepo-storage-ocfl</artifactId>
-  <version>6.0.0-beta-1</version>
+  <version>6.0.0-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>fcrepo-storage-ocfl</name>
@@ -29,7 +29,7 @@
     <connection>scm:git:git://github.com/fcrepo/${project_name}.git</connection>
     <developerConnection>scm:git:git@github.com:fcrepo/${project_name}.git</developerConnection>
     <url>https://github.com/fcrepo/${project_name}</url>
-    <tag>fcrepo-storage-ocfl-6.0.0-beta-1</tag>
+    <tag>HEAD</tag>
   </scm>
 
   <build>
