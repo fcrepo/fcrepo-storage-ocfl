@@ -146,6 +146,34 @@ public class ValidationUtilTest {
     }
 
     @Test
+    public void validateIdFailWhenStartsWithFcrPrefix() {
+        ValidationUtil.validateId(context, "id", ResourceUtils.resourceId("a/fcr:tx"));
+        ValidationUtil.validateId(context, "id", ResourceUtils.resourceId("a/fcr:foo/b"));
+        ValidationUtil.validateId(context, "id", ResourceUtils.resourceId("fcr:foo:bar/a"));
+        ValidationUtil.validateId(context, "id", ResourceUtils.resourceId("afcr:tx"));
+        ValidationUtil.validateId(context, "id", ResourceUtils.resourceId("a/fcr:metadata"));
+        ValidationUtil.validateId(context, "id", ResourceUtils.resourceId("a/fcr:acl"));
+
+        failsWith(containsString("Invalid 'id' value 'info:fedora/a/fcr:tx'." +
+                        " IDs may not contain parts prefixed with 'fcr:'"),
+                containsString("Invalid 'id' value 'info:fedora/a/fcr:foo/b'." +
+                        " IDs may not contain parts prefixed with 'fcr:'"),
+                containsString("Invalid 'id' value 'info:fedora/fcr:foo:bar/a'." +
+                        " IDs may not contain parts prefixed with 'fcr:'"));
+    }
+
+    @Test
+    public void validateIdFailWhenFcrAclOrFcrMetadataNotFinalPart() {
+        ValidationUtil.validateId(context, "id", ResourceUtils.resourceId("a/fcr:metadata/b"));
+        ValidationUtil.validateId(context, "id", ResourceUtils.resourceId("a/fcr:acl/b"));
+
+        failsWith(containsString("Invalid 'id' value 'info:fedora/a/fcr:metadata/b'." +
+                        " IDs may not have a part following 'fcr:metadata'"),
+                containsString("Invalid 'id' value 'info:fedora/a/fcr:acl/b'." +
+                        " IDs may not have a part following 'fcr:acl'"));
+    }
+
+    @Test
     public void validateIdDoesNotFailWhenIllegalSuffixEntirePart() {
         final var tmpl = ResourceUtils.resourceId("a/b/%s");
         FORBIDDEN_SUFFIXES.forEach(part -> {
