@@ -51,9 +51,22 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
     private final String defaultVersionUserName;
     private final String defaultVersionUserAddress;
     private HeadersValidator headersValidator;
+    private boolean useUnsafeWrite = false;
 
     private boolean closed = false;
 
+    /**
+     * Creates a new DefaultOcflObjectSessionFactory
+     *
+     * @param ocflRepo the ocfl repo
+     * @param stagingRoot the path to the directory to stage changes in
+     * @param objectMapper the object mapper used to serialize resource headers
+     * @param headersCache the cache to store deserialized headers in
+     * @param defaultCommitType specifies if commits should create new versions
+     * @param defaultVersionMessage the text to insert in the OCFL version message
+     * @param defaultVersionUserName the user name to insert in the OCFL version
+     * @param defaultVersionUserAddress the user address to insert in the OCFL version
+     */
     public DefaultOcflObjectSessionFactory(final MutableOcflRepository ocflRepo,
                                            final Path stagingRoot,
                                            final ObjectMapper objectMapper,
@@ -89,7 +102,8 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
                 headerWriter,
                 defaultCommitType,
                 headersCache,
-                headersValidator
+                headersValidator,
+                useUnsafeWrite
         );
 
         session.versionAuthor(defaultVersionUserName, defaultVersionUserAddress);
@@ -104,6 +118,11 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
             closed = true;
             ocflRepo.close();
         }
+    }
+
+    @Override
+    public void useUnsafeWrite(boolean useUnsafeWrite) {
+        this.useUnsafeWrite = useUnsafeWrite;
     }
 
     private void enforceOpen() {
