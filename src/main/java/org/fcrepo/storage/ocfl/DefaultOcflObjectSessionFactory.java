@@ -121,7 +121,7 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
     }
 
     @Override
-    public void useUnsafeWrite(boolean useUnsafeWrite) {
+    public void useUnsafeWrite(final boolean useUnsafeWrite) {
         this.useUnsafeWrite = useUnsafeWrite;
     }
 

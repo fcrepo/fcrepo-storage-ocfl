@@ -102,7 +102,7 @@ public class DefaultOcflObjectSessionTest {
     private static final String DEFAULT_USER = "fedoraAdmin";
     private static final String DEFAULT_ADDRESS = "info:fedora/fedoraAdmin";
 
-    public DefaultOcflObjectSessionTest(boolean useUnsafeWrite) {
+    public DefaultOcflObjectSessionTest(final boolean useUnsafeWrite) {
         this.useUnsafeWrite = useUnsafeWrite;
     }
 
