@@ -96,6 +96,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private final ObjectWriter headerWriter;
     private final Cache<String, ResourceHeaders> headersCache;
     private final HeadersValidator headersValidator;
+    private final boolean useUnsafeWrite;
 
     private final DigestAlgorithm digestAlgorithm;
     private final OcflOption[] ocflOptions;
@@ -120,7 +121,8 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                                     final ObjectWriter headerWriter,
                                     final CommitType commitType,
                                     final Cache<String, ResourceHeaders> headersCache,
-                                    final HeadersValidator headersValidator) {
+                                    final HeadersValidator headersValidator,
+                                    final boolean useUnsafeWrite) {
         this.sessionId = Objects.requireNonNull(sessionId, "sessionId cannot be null");
         this.ocflRepo = Objects.requireNonNull(ocflRepo, "ocflRepo cannot be null");
         this.ocflObjectId = Objects.requireNonNull(ocflObjectId, "ocflObjectId cannot be null");
@@ -130,6 +132,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         this.commitType = Objects.requireNonNull(commitType, "commitType cannot be null");
         this.headersCache = Objects.requireNonNull(headersCache, "headersCache cannot be null");
         this.headersValidator = Objects.requireNonNull(headersValidator, "headersValidator cannot be null");
+        this.useUnsafeWrite = useUnsafeWrite;
 
         this.versionInfo = new VersionInfo();
         this.deletePaths = new HashSet<>();
@@ -666,16 +669,24 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private Consumer<OcflObjectUpdater> createObjectUpdater() {
         return updater -> {
             if (Files.exists(objectStaging)) {
-                if (SystemUtils.IS_OS_WINDOWS) {
-                    addDecodedPaths(updater, ocflOptions);
-                } else {
-                    updater.addPath(objectStaging, ocflOptions);
+                try (final var paths = Files.walk(objectStaging)) {
+                    paths.filter(Files::isRegularFile).forEach(file -> {
+                        final var logicalPath = stagingPathToLogicalPath(file);
+                        final var digest = digests.get(new PathPair(logicalPath, null));
+
+                        if (useUnsafeWrite && digest != null) {
+                            updater.unsafeAddPath(digest, file, logicalPath, ocflOptions);
+                        } else {
+                            updater.addPath(file, logicalPath, ocflOptions);
+                            if (digest != null) {
+                                updater.addFileFixity(logicalPath, digestAlgorithm, digest);
+                            }
+                        }
+                    });
+                } catch (final IOException e) {
+                    throw new UncheckedIOException(e);
                 }
             }
-
-            digests.forEach((path, digest) -> {
-                updater.addFileFixity(path.path, digestAlgorithm, digest);
-            });
 
             deletePaths.forEach(path -> {
                 updater.removeFile(path.path);
@@ -801,17 +812,6 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
             return new PathPair(value, encoded);
         }
         return new PathPair(value, value);
-    }
-
-    private void addDecodedPaths(final OcflObjectUpdater updater, final OcflOption... ocflOptions) {
-        try (final var paths = Files.walk(objectStaging)) {
-            paths.filter(Files::isRegularFile).forEach(file -> {
-                final var logicalPath = stagingPathToLogicalPath(file);
-                updater.addPath(file, logicalPath, ocflOptions);
-            });
-        } catch (final IOException e) {
-            throw new UncheckedIOException(e);
-        }
     }
 
     private String stagingPathToLogicalPath(final Path path) {

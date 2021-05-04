@@ -40,6 +40,8 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -52,6 +54,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -72,13 +75,20 @@ import static org.junit.Assert.fail;
 /**
  * @author pwinckles
  */
+@RunWith(Parameterized.class)
 public class DefaultOcflObjectSessionTest {
 
     @Rule
     public TemporaryFolder temp = TemporaryFolder.builder().assureDeletion().build();
 
+    @Parameterized.Parameters
+    public static Collection<Boolean> data() {
+        return List.of(false, true);
+    }
+
     private Path ocflRoot;
     private Path sessionStaging;
+    private boolean useUnsafeWrite;
 
     private MutableOcflRepository ocflRepo;
     private OcflObjectSessionFactory sessionFactory;
@@ -91,6 +101,10 @@ public class DefaultOcflObjectSessionTest {
     private static final String DEFAULT_MESSAGE = "F6 migration";
     private static final String DEFAULT_USER = "fedoraAdmin";
     private static final String DEFAULT_ADDRESS = "info:fedora/fedoraAdmin";
+
+    public DefaultOcflObjectSessionTest(final boolean useUnsafeWrite) {
+        this.useUnsafeWrite = useUnsafeWrite;
+    }
 
     @Before
     public void setup() throws IOException {
@@ -118,6 +132,7 @@ public class DefaultOcflObjectSessionTest {
                 objectMapper,
                 new NoOpCache<>(),
                 CommitType.NEW_VERSION, DEFAULT_MESSAGE, DEFAULT_USER, DEFAULT_ADDRESS);
+        sessionFactory.useUnsafeWrite(useUnsafeWrite);
 
         cache = Caffeine.newBuilder().maximumSize(100).build();
 
@@ -126,6 +141,7 @@ public class DefaultOcflObjectSessionTest {
                 objectMapper,
                 new CaffeineCache<>(cache),
                 CommitType.NEW_VERSION, DEFAULT_MESSAGE, DEFAULT_USER, DEFAULT_ADDRESS);
+        cachedSessionFactory.useUnsafeWrite(useUnsafeWrite);
     }
 
     @Test
@@ -915,8 +931,8 @@ public class DefaultOcflObjectSessionTest {
         }
     }
 
-    @Test(expected = FixityCheckException.class)
-    public void failWhenProvidedDigestDoesNotMatchComputed() throws URISyntaxException {
+    @Test
+    public void failWhenProvidedDigestDoesNotMatchComputed() {
         final var resourceId = "info:fedora/foo";
         final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "bar", headers -> {
             headers.withDigests(List.of(
@@ -927,7 +943,21 @@ public class DefaultOcflObjectSessionTest {
         final var session = sessionFactory.newSession(resourceId);
 
         write(session, content);
-        session.commit();
+
+        try {
+            session.commit();
+            if (useUnsafeWrite) {
+                // an exception should not be thrown when unsafe writes are used
+            } else {
+                fail("Commit should have thrown a FixityCheckException");
+            }
+        } catch (FixityCheckException e) {
+            if (!useUnsafeWrite) {
+                // this is expected
+            } else {
+                fail("Commit should not have thrown a FixityCheckException");
+            }
+        }
     }
 
     @Test
