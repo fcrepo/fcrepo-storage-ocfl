@@ -50,7 +50,7 @@ public class CaffeineCache<K, V> implements Cache<K, V> {
     }
 
     @Override
-    public void invalidateAll(final Iterable<? extends K> keys) {
+    public void invalidateAll(final Iterable<K> keys) {
         cache.invalidateAll(keys);
     }
 

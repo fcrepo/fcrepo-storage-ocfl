@@ -60,7 +60,7 @@ public interface Cache<K,V> {
      *
      * @param keys the keys.
      */
-    void invalidateAll(final Iterable<? extends K> keys);
+    void invalidateAll(final Iterable<K> keys);
 
     /**
      * Invalidate the entire cache.
