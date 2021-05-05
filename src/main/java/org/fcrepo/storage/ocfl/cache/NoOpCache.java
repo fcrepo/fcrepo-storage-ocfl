@@ -42,4 +42,13 @@ public class NoOpCache<K, V> implements Cache<K, V> {
         // no op
     }
 
+    @Override
+    public void invalidateAll(final Iterable<K> keys) {
+        // no op
+    }
+
+    @Override
+    public void invalidateAll() {
+        // no op
+    }
 }
