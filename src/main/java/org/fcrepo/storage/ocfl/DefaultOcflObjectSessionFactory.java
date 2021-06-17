@@ -46,6 +46,7 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
     private final ObjectReader headerReader;
     private final ObjectWriter headerWriter;
     private final Cache<String, ResourceHeaders> headersCache;
+    private final Cache<String, String> rootIdCache;
     private CommitType defaultCommitType;
     private final String defaultVersionMessage;
     private final String defaultVersionUserName;
@@ -62,6 +63,7 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
      * @param stagingRoot the path to the directory to stage changes in
      * @param objectMapper the object mapper used to serialize resource headers
      * @param headersCache the cache to store deserialized headers in
+     * @param rootIdCache the cache that maps OCFL objects to the root resource id
      * @param defaultCommitType specifies if commits should create new versions
      * @param defaultVersionMessage the text to insert in the OCFL version message
      * @param defaultVersionUserName the user name to insert in the OCFL version
@@ -71,6 +73,7 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
                                            final Path stagingRoot,
                                            final ObjectMapper objectMapper,
                                            final Cache<String, ResourceHeaders> headersCache,
+                                           final Cache<String, String> rootIdCache,
                                            final CommitType defaultCommitType,
                                            final String defaultVersionMessage,
                                            final String defaultVersionUserName,
@@ -81,6 +84,7 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
                 .readerFor(ResourceHeaders.class);
         this.headerWriter = objectMapper.writerFor(ResourceHeaders.class);
         this.headersCache = headersCache;
+        this.rootIdCache = rootIdCache;
         this.defaultCommitType = Objects.requireNonNull(defaultCommitType, "defaultCommitType cannot be null");
         this.defaultVersionMessage = defaultVersionMessage;
         this.defaultVersionUserName = defaultVersionUserName;
@@ -102,6 +106,7 @@ public class DefaultOcflObjectSessionFactory implements OcflObjectSessionFactory
                 headerWriter,
                 defaultCommitType,
                 headersCache,
+                rootIdCache,
                 headersValidator,
                 useUnsafeWrite
         );
