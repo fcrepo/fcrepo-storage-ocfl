@@ -95,6 +95,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private final ObjectReader headerReader;
     private final ObjectWriter headerWriter;
     private final Cache<String, ResourceHeaders> headersCache;
+    private final Cache<String, String> rootIdCache;
     private final HeadersValidator headersValidator;
     private final boolean useUnsafeWrite;
 
@@ -109,7 +110,9 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private String rootResourceId;
     private boolean isArchivalGroup;
     private boolean closed = false;
+    private boolean rolledback = false;
     private boolean deleteObject = false;
+    private boolean isNewObject = false;
     private VersionNum newVersionNum;
     private boolean hadMutableHeadBeforeCommit;
 
@@ -121,6 +124,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                                     final ObjectWriter headerWriter,
                                     final CommitType commitType,
                                     final Cache<String, ResourceHeaders> headersCache,
+                                    final Cache<String, String> rootIdCache,
                                     final HeadersValidator headersValidator,
                                     final boolean useUnsafeWrite) {
         this.sessionId = Objects.requireNonNull(sessionId, "sessionId cannot be null");
@@ -131,6 +135,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         this.headerWriter = Objects.requireNonNull(headerWriter, "headerWriter cannot be null");
         this.commitType = Objects.requireNonNull(commitType, "commitType cannot be null");
         this.headersCache = Objects.requireNonNull(headersCache, "headersCache cannot be null");
+        this.rootIdCache = Objects.requireNonNull(rootIdCache, "rootIdCache cannot be null");
         this.headersValidator = Objects.requireNonNull(headersValidator, "headersValidator cannot be null");
         this.useUnsafeWrite = useUnsafeWrite;
 
@@ -435,6 +440,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         closed = true;
 
         if (deleteObject) {
+            rootIdCache.invalidate(ocflObjectId);
             ocflRepo.purgeObject(ocflObjectId);
         }
 
@@ -463,6 +469,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
         if (newVersionNum != null) {
             moveStagedHeadersToCache(newVersionNum.toString());
+
+            if (isNewObject) {
+                rootIdCache.put(ocflObjectId, rootResourceId());
+            }
         }
 
         cleanup();
@@ -478,6 +488,12 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     @Override
     public synchronized void rollback() {
+        if (rolledback) {
+            return;
+        }
+
+        rolledback = true;
+
         if (closed && newVersionNum != null) {
             if (hadMutableHeadBeforeCommit) {
                 throw new IllegalStateException(String.format(
@@ -487,13 +503,16 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
             LOG.info("Rolling back {} version {}", ocflObjectId, newVersionNum);
 
-            if (VersionNum.V1.equals(newVersionNum) ||
-                    (VersionNum.fromInt(2).equals(newVersionNum) && ocflRepo.hasStagedChanges(ocflObjectId))) {
+            if (isNewObject) {
                 // Purge the object if it only has one version or if it is a newly created object with a mutable head
+                rootIdCache.invalidate(ocflObjectId);
                 ocflRepo.purgeObject(ocflObjectId);
             } else {
                 ocflRepo.rollbackToVersion(ObjectVersionId.version(ocflObjectId, newVersionNum.previousVersionNum()));
             }
+        } else {
+            closed = true;
+            cleanup();
         }
     }
 
@@ -747,20 +766,23 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
      */
     private void loadRootResourceId() {
         if (containsOcflObject()) {
-            // This cannot be read from the cache because we do not know what the root resource id is
-            final var stream = readFromOcflOptional(encode(PersistencePaths.ROOT_HEADER_PATH), null);
+            rootResourceId = rootIdCache.get(ocflObjectId, ocflObjectId -> {
+                final var stream = readFromOcflOptional(encode(PersistencePaths.ROOT_HEADER_PATH), null);
 
-            if (stream.isPresent()) {
-                final var headers = parseHeaders(stream.get());
-                rootResourceId = headers.getId();
-                isArchivalGroup = headers.isArchivalGroup();
-                final var headVersion = ocflRepo.describeVersion(ObjectVersionId.head(ocflObjectId));
-                addToCache(rootResourceId, headVersion.getVersionNum().toString(), headers);
-            } else {
-                throw new IllegalStateException(
-                        String.format("OCFL object %s exists but it does not contain a root Fedora resource",
-                                ocflObjectId));
-            }
+                if (stream.isPresent()) {
+                    final var headers = parseHeaders(stream.get());
+                    final var headVersion = ocflRepo.describeVersion(ObjectVersionId.head(ocflObjectId));
+                    addToCache(headers.getId(), headVersion.getVersionNum().toString(), headers);
+                    return headers.getId();
+                } else {
+                    throw new IllegalStateException(
+                            String.format("OCFL object %s exists but it does not contain a root Fedora resource",
+                                    ocflObjectId));
+                }
+            });
+
+            final var headers = readHeaders(rootResourceId);
+            isArchivalGroup = headers.isArchivalGroup();
         }
     }
 
@@ -776,6 +798,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         if (rootResourceId == null) {
             rootResourceId = headers.getId();
             isArchivalGroup = headers.isArchivalGroup();
+            isNewObject = true;
         }
         return rootResourceId;
     }
@@ -864,6 +887,9 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     private void cleanup() {
+        stagedHeaders.clear();
+        deletePaths.clear();
+        digests.clear();
         if (Files.exists(objectStaging)) {
             FileUtils.deleteQuietly(objectStaging.toFile());
         }
@@ -941,7 +967,21 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         stagedHeaders.clear();
     }
 
-    private void addToCache(final String resourceId, final String versionNumber, final ResourceHeaders headers) {
+    /**
+     * Adds a versioned copy of the resource's headers to the cache.
+     *
+     * Note, this cache is not invalidated on rollback or purge. This does not create bugs in Fedora because previous
+     * versions of a resource are always accessed via mementos. This means that, for example, if a change is rolled
+     * back, the resource headers from the change are left in the cache, but they are orphaned and will eventually
+     * expire without being accessed again.
+     *
+     * @param resourceId the resource's id
+     * @param versionNumber the version number of the resource
+     * @param headers the headers
+     */
+    private void addToCache(final String resourceId,
+                            final String versionNumber,
+                            final ResourceHeaders headers) {
         final var key = cacheKey(resourceId, versionNumber);
         LOG.trace("Adding to cache {}", key);
         headersCache.put(key, headers);

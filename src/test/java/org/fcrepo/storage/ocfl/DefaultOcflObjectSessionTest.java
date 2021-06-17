@@ -93,7 +93,8 @@ public class DefaultOcflObjectSessionTest {
     private MutableOcflRepository ocflRepo;
     private OcflObjectSessionFactory sessionFactory;
     private OcflObjectSessionFactory cachedSessionFactory;
-    private Cache<String, ResourceHeaders> cache;
+    private Cache<String, ResourceHeaders> headersCache;
+    private Cache<String, String> rootIdCache;
 
     private static final String ROOT = "info:fedora";
     private static final String DEFAULT_AG_ID = "info:fedora/foo";
@@ -131,15 +132,18 @@ public class DefaultOcflObjectSessionTest {
                 sessionStaging,
                 objectMapper,
                 new NoOpCache<>(),
+                new NoOpCache<>(),
                 CommitType.NEW_VERSION, DEFAULT_MESSAGE, DEFAULT_USER, DEFAULT_ADDRESS);
         sessionFactory.useUnsafeWrite(useUnsafeWrite);
 
-        cache = Caffeine.newBuilder().maximumSize(100).build();
+        headersCache = Caffeine.newBuilder().maximumSize(100).build();
+        rootIdCache = Caffeine.newBuilder().maximumSize(100).build();
 
         cachedSessionFactory = new DefaultOcflObjectSessionFactory(ocflRepo,
                 sessionStaging,
                 objectMapper,
-                new CaffeineCache<>(cache),
+                new CaffeineCache<>(headersCache),
+                new CaffeineCache<>(rootIdCache),
                 CommitType.NEW_VERSION, DEFAULT_MESSAGE, DEFAULT_USER, DEFAULT_ADDRESS);
         cachedSessionFactory.useUnsafeWrite(useUnsafeWrite);
     }
@@ -345,7 +349,7 @@ public class DefaultOcflObjectSessionTest {
     }
 
     @Test
-    public void doNothingWhenRollbackOnSessionThatIsNotCommitted() {
+    public void removeStagedContentWhenRollbackOnSessionThatIsNotCommitted() {
         final var resourceId = "info:fedora/foo/bar";
         final var session = sessionFactory.newSession(resourceId);
 
@@ -357,7 +361,30 @@ public class DefaultOcflObjectSessionTest {
 
         session.rollback();
 
+        expectResourceNotFound(resourceId, session);
+    }
+
+    @Test
+    public void failCommitWhenSessionRolledback() {
+        final var resourceId = "info:fedora/foo/bar";
+        final var session = sessionFactory.newSession(resourceId);
+
+        final var content = ResourceUtils.atomicContainer(resourceId, "info:fedora/foo", "test");
+
+        write(session, content);
+
         assertResourceContent("test", content, session.readContent(resourceId));
+
+        session.rollback();
+
+        expectResourceNotFound(resourceId, session);
+
+        try {
+            session.commit();
+            fail("Should have thrown an exception");
+        } catch (IllegalStateException e) {
+            // expected exception
+        }
     }
 
     @Test
@@ -422,14 +449,14 @@ public class DefaultOcflObjectSessionTest {
 
         assertResourceContent("baz", binaryContent, stagedContent);
 
-        assertEquals(0, cache.estimatedSize());
+        assertEquals(0, headersCache.estimatedSize());
 
         session.commit();
 
-        assertEquals(3, cache.estimatedSize());
-        assertTrue(cache.asMap().containsKey(agId + "_v1"));
-        assertTrue(cache.asMap().containsKey(containerId + "_v1"));
-        assertTrue(cache.asMap().containsKey(binaryId + "_v1"));
+        assertEquals(3, headersCache.estimatedSize());
+        assertTrue(headersCache.asMap().containsKey(agId + "_v1"));
+        assertTrue(headersCache.asMap().containsKey(containerId + "_v1"));
+        assertTrue(headersCache.asMap().containsKey(binaryId + "_v1"));
 
         final var committedAg = session.readContent(agId);
         final var committedContainer = session.readContent(containerId);

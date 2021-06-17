@@ -82,6 +82,7 @@ public class DefaultOcflObjectSessionFactoryTest {
                 sessionStaging,
                 objectMapper,
                 new NoOpCache<>(),
+                new NoOpCache<>(),
                 CommitType.NEW_VERSION, DEFAULT_MESSAGE, DEFAULT_USER, DEFAULT_ADDRESS);
     }
 
