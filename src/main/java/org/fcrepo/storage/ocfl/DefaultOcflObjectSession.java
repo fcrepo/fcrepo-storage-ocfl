@@ -40,6 +40,7 @@ import org.fcrepo.storage.ocfl.validation.HeadersValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -574,7 +575,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
         if (Files.exists(stagingPath)) {
             try {
-                return Optional.of(Files.newInputStream(stagingPath));
+                return Optional.of(new BufferedInputStream(Files.newInputStream(stagingPath)));
             } catch (final IOException e) {
                 throw new UncheckedIOException(e);
             }
