@@ -18,8 +18,10 @@
 
 package org.fcrepo.storage.ocfl;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
+import com.google.common.collect.Streams;
 import edu.wisc.library.ocfl.api.MutableOcflRepository;
 import edu.wisc.library.ocfl.api.OcflObjectUpdater;
 import edu.wisc.library.ocfl.api.OcflOption;
@@ -41,6 +43,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -106,6 +109,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private final Set<PathPair> deletePaths;
     private final Map<PathPair, String> digests;
     private final Map<String, ResourceHeaders> stagedHeaders;
+    private final Map<String, String> stagedHeaderPaths;
 
     private CommitType commitType;
     private String rootResourceId;
@@ -144,6 +148,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         this.deletePaths = new HashSet<>();
         this.digests = new HashMap<>();
         this.stagedHeaders = new HashMap<>();
+        this.stagedHeaderPaths = new HashMap<>();
         this.ocflOptions = new OcflOption[] {OcflOption.MOVE_SOURCE, OcflOption.OVERWRITE};
 
         loadRootResourceId();
@@ -170,7 +175,6 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         final var headerPath = encode(paths.getHeaderFilePath());
 
         Path contentDst = null;
-        final var headerDst = createStagingPath(headerPath);
 
         deletePaths.remove(contentPath);
         deletePaths.remove(headerPath);
@@ -210,13 +214,12 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
             final var finalHeaders = headersBuilder.build();
 
-            writeHeaders(finalHeaders, headerDst, paths);
+            stageHeaders(finalHeaders, headerPath.path, paths);
             touchRelatedResources(finalHeaders);
 
             return finalHeaders;
         } catch (final RuntimeException e) {
             safeDelete(contentDst);
-            safeDelete(headerDst);
             throw e;
         }
     }
@@ -228,11 +231,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         final var paths = resolvePersistencePaths(headers);
 
         final var headerPath = encode(paths.getHeaderFilePath());
-        final var headerDst = createStagingPath(headerPath);
 
         deletePaths.remove(headerPath);
 
-        writeHeaders(headers, headerDst, paths);
+        stageHeaders(headers, headerPath.path, paths);
         touchRelatedResources(headers);
     }
 
@@ -262,8 +264,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                     .withDigests(null)
                     .build();
 
-            final var headerDst = createStagingPath(headerPath);
-            writeHeaders(finalHeaders, headerDst, paths);
+            stageHeaders(finalHeaders, headerPath.path, paths);
             touchRelatedResources(finalHeaders);
         }
     }
@@ -305,6 +306,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     public boolean containsResource(final String resourceId) {
         if (rootResourceId == null) {
             return false;
+        }
+
+        if (stagedHeaders.containsKey(resourceId)) {
+            return true;
         }
 
         final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));
@@ -372,8 +377,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         final var headerPath = PersistencePaths.headerPath(rootResourceId(), resourceId);
 
         if (!fileExistsInOcfl(headerPath)) {
-            final var encoded = encode(headerPath);
-            if (Files.exists(stagingPath(encoded))) {
+            if (stagedHeaders.containsKey(resourceId)) {
                 return Collections.emptyList();
             } else {
                 throw new NotFoundException(String.format("Resource %s was not found.", resourceId));
@@ -392,27 +396,28 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
      */
     @Override
     public Stream<ResourceHeaders> streamResourceHeaders() {
-        final var headerPaths = new HashSet<String>();
-
-        headerPaths.addAll(listStagedHeaders());
-        headerPaths.addAll(listCommittedHeaders());
+        final var headerPaths = listCommittedHeaders();
 
         deletePaths.forEach(path -> headerPaths.remove(path.path));
+        headerPaths.removeAll(stagedHeaderPaths.values());
 
         final var it = headerPaths.iterator();
 
-        return StreamSupport.stream(Spliterators.spliterator(new Iterator<>() {
-            @Override
-            public boolean hasNext() {
-                return it.hasNext();
-            }
-            @Override
-            public ResourceHeaders next() {
-                final var next = it.next();
-                return parseHeaders(readStreamOptional(encode(next), null)
-                        .orElseThrow(() -> new IllegalStateException("Unable to find resource header file " + next)));
-            }
-        }, headerPaths.size(), SPLITERATOR_OPTS), false);
+        return Streams.concat(stagedHeaders.values().stream(),
+                StreamSupport.stream(Spliterators.spliterator(new Iterator<>() {
+                    @Override
+                    public boolean hasNext() {
+                        return it.hasNext();
+                    }
+
+                    @Override
+                    public ResourceHeaders next() {
+                        final var next = it.next();
+                        return parseHeaders(readStreamOptional(encode(next), null)
+                                .orElseThrow(() ->
+                                        new IllegalStateException("Unable to find resource header file " + next)));
+                    }
+                }, headerPaths.size(), SPLITERATOR_OPTS), false));
     }
 
     @Override
@@ -447,7 +452,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
         hadMutableHeadBeforeCommit = ocflRepo.hasStagedChanges(ocflObjectId);
 
-        if (!deletePaths.isEmpty() || Files.exists(objectStaging)) {
+        if (!deletePaths.isEmpty() || !stagedHeaders.isEmpty() || Files.exists(objectStaging)) {
             deletePathsFromStaging();
 
             final var updater = createObjectUpdater();
@@ -624,18 +629,14 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         }
     }
 
-    private void writeHeaders(final ResourceHeaders headers, final Path destination, final PersistencePaths paths) {
+    private void stageHeaders(final ResourceHeaders headers, final String headerPath, final PersistencePaths paths) {
         validateHeaders(headers, paths);
-        writeHeadersNoValidation(headers, destination);
+        stageHeadersNoValidation(headers, headerPath);
     }
 
-    private void writeHeadersNoValidation(final ResourceHeaders headers, final Path destination) {
-        try {
-            headerWriter.writeValue(destination.toFile(), headers);
-            stagedHeaders.put(headers.getId(), headers);
-        } catch (final IOException e) {
-            throw new UncheckedIOException(e);
-        }
+    private void stageHeadersNoValidation(final ResourceHeaders headers, final String headerPath) {
+        stagedHeaders.put(headers.getId(), headers);
+        stagedHeaderPaths.put(headers.getId(), headerPath);
     }
 
     private void validateHeaders(final ResourceHeaders headers, final PersistencePaths paths) {
@@ -680,14 +681,23 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                 .withMementoCreatedDate(timestamp)
                 .build();
 
-        final var headerPath = encode(PersistencePaths.headerPath(rootResourceId(), resourceId));
-        final var headerDst = createStagingPath(headerPath);
+        final var headerPath = PersistencePaths.headerPath(rootResourceId(), resourceId);
 
-        writeHeadersNoValidation(headers, headerDst);
+        stageHeadersNoValidation(headers, headerPath);
     }
 
     private Consumer<OcflObjectUpdater> createObjectUpdater() {
         return updater -> {
+            stagedHeaders.forEach((id, headers) -> {
+                final var path = stagedHeaderPaths.get(id);
+                try {
+                    updater.writeFile(new ByteArrayInputStream(headerWriter.writeValueAsBytes(headers)),
+                            path, ocflOptions);
+                } catch (JsonProcessingException e) {
+                    throw new RuntimeException("Failed to serialize resource headers", e);
+                }
+            });
+
             if (Files.exists(objectStaging)) {
                 try (final var paths = Files.walk(objectStaging)) {
                     paths.filter(Files::isRegularFile).forEach(file -> {
@@ -848,21 +858,6 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         return relative;
     }
 
-    private Set<String> listStagedHeaders() {
-        if (Files.exists(objectStaging)) {
-            try (final var paths = Files.walk(objectStaging)) {
-                return paths.filter(Files::isRegularFile)
-                        .map(this::stagingPathToLogicalPath)
-                        .filter(PersistencePaths::isHeaderFile)
-                        .collect(Collectors.toSet());
-            } catch (final IOException e) {
-                throw new UncheckedIOException(e);
-            }
-        }
-
-        return Collections.emptySet();
-    }
-
     private Set<String> listCommittedHeaders() {
         if (!(isOpen() && deleteObject) && containsOcflObject()) {
             return ocflRepo.describeVersion(ObjectVersionId.head(ocflObjectId)).getFiles()
@@ -889,6 +884,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     private void cleanup() {
         stagedHeaders.clear();
+        stagedHeaderPaths.clear();
         deletePaths.clear();
         digests.clear();
         if (Files.exists(objectStaging)) {
