@@ -659,17 +659,17 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                 && !Objects.equals(rootResourceId(), headers.getId())
                 && !InteractionModel.ACL.getUri().equals(headers.getInteractionModel())) {
             LOG.debug("Touching AG {} after updating {}", rootResourceId(), headers.getId());
-            touchResource(rootResourceId(), headers.getLastModifiedDate());
+            touchResource(rootResourceId(), headers.getMementoCreatedDate());
         }
 
         if (InteractionModel.NON_RDF_DESCRIPTION.getUri().equals(headers.getInteractionModel())) {
             LOG.debug("Touching binary {} after updating {}", headers.getParent(), headers.getId());
-            touchResource(headers.getParent(), headers.getLastModifiedDate());
+            touchResource(headers.getParent(), headers.getMementoCreatedDate());
         } else if (InteractionModel.NON_RDF.getUri().equals(headers.getInteractionModel())) {
             final var descriptionId = headers.getId() + "/" + PersistencePaths.FCR_METADATA;
             LOG.debug("Touching binary description {} after updating {}", descriptionId, headers.getId());
             try {
-                touchResource(descriptionId, headers.getLastModifiedDate());
+                touchResource(descriptionId, headers.getMementoCreatedDate());
             } catch (final NotFoundException e) {
                 // Ignore this exception because it just means that the binary description hasn't been created yet
             }

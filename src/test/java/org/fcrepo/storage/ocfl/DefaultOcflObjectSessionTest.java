@@ -1386,6 +1386,34 @@ public class DefaultOcflObjectSessionTest {
     }
 
     @Test
+    public void touchBinaryWhenBinaryDescMementoCreated() {
+        final var resourceId = "info:fedora/foo";
+        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "foo");
+
+        final var descId = "info:fedora/foo/fcr:metadata";
+        final var descContent = ResourceUtils.atomicDesc(descId, resourceId, "desc");
+
+        final var session = sessionFactory.newSession(resourceId);
+
+        write(session, content);
+        write(session, descContent);
+        session.commit();
+
+        assertVersions(session.listVersions(resourceId), "v1");
+        assertVersions(session.listVersions(descId), "v1");
+
+        final var session2 = sessionFactory.newSession(resourceId);
+
+        session2.writeHeaders(ResourceHeaders.builder(session.readHeaders(descId))
+                .withMementoCreatedDate(Instant.now())
+                .build());
+        session2.commit();
+
+        assertVersions(session.listVersions(resourceId), "v1", "v2");
+        assertVersions(session.listVersions(descId), "v1", "v2");
+    }
+
+    @Test
     public void failWriteWhenContentSizeDoesNotMatch() {
         final var resourceId = "info:fedora/foo";
         final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "first", headers -> {
@@ -1522,6 +1550,7 @@ public class DefaultOcflObjectSessionTest {
                 .withDigests(null)
                 .withDeleted(true)
                 .withLastModifiedDate(now)
+                .withMementoCreatedDate(now)
                 .withStateToken(ResourceUtils.getStateToken(now))
                 .build();
         session.deleteContentFile(deleteHeaders);

@@ -313,6 +313,7 @@ public final class ResourceUtils {
         headers.withLastModifiedBy(DEFAULT_USER);
         final Instant now = Instant.now();
         headers.withLastModifiedDate(now);
+        headers.withMementoCreatedDate(now);
         headers.withStateToken(getStateToken(now));
         if (content != null) {
             headers.withContentSize((long) content.length());
