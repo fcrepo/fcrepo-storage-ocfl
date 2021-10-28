@@ -12,7 +12,7 @@
 
   <properties>
     <compiler.plugin.version>3.8.0</compiler.plugin.version>
-    <fcrepo-build-tools.version>6.0.0-alpha-1</fcrepo-build-tools.version>
+    <fcrepo-build-tools.version>6.0.0</fcrepo-build-tools.version>
     <gpg.plugin.version>1.6</gpg.plugin.version> <jackson.version>2.13.0</jackson.version>
     <license.plugin.version>3.0</license.plugin.version>
     <project.java.source>11</project.java.source>
@@ -297,7 +297,7 @@
     <license>
       <name>Apache License, Version 2.0</name>
       <url>http://www.apache.org/licenses/LICENSE-2.0</url>
-      <comments>Copyright (c) 2015 DuraSpace</comments>
+      <comments>Copyright (c) 2015-2021 Lyrasis</comments>
     </license>
   </licenses>
 
