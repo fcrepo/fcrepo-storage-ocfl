@@ -14,7 +14,7 @@ import edu.wisc.library.ocfl.api.model.ObjectVersionId;
 import edu.wisc.library.ocfl.core.OcflRepositoryBuilder;
 import edu.wisc.library.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig;
 import edu.wisc.library.ocfl.core.path.mapper.LogicalPathMappers;
-import edu.wisc.library.ocfl.core.storage.filesystem.FileSystemOcflStorage;
+import edu.wisc.library.ocfl.core.storage.OcflStorageBuilder;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.fcrepo.storage.ocfl.CommitType;
@@ -90,7 +90,7 @@ public class ObjectValidatorTest {
         ocflRepo = new OcflRepositoryBuilder()
                 .defaultLayoutConfig(new HashedNTupleLayoutConfig())
                 .logicalPathMapper(logicalPathMapper)
-                .storage(FileSystemOcflStorage.builder().repositoryRoot(ocflRoot).build())
+                .storage(OcflStorageBuilder.builder().fileSystem(ocflRoot).build())
                 .workDir(ocflTemp)
                 .buildMutable();
 
