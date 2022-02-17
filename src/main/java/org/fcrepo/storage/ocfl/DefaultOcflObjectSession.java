@@ -424,8 +424,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     @Override
-    public void invalidateCache(final String resourceId, final String versionNumber) {
-        headersCache.invalidate(cacheKey(resourceId, versionNumber));
+    public void invalidateCache(final String resourceId) {
+        listVersions(resourceId).stream()
+            .map(version -> cacheKey(resourceId, version.getVersionNumber()))
+            .forEach(this::invalidateCache);
     }
 
     @Override

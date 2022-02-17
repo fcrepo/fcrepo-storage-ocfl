@@ -154,9 +154,8 @@ public interface OcflObjectSession extends AutoCloseable {
      * Invalidate the cache for a Fedora resource's headers
      *
      * @param resourceId the Fedora resource id to read
-     * @param versionNumber the version to read, or null for HEAD
      */
-    void invalidateCache(final String resourceId, final String versionNumber);
+    void invalidateCache(final String resourceId);
 
     /**
      * Sets the commit behavior -- create a new version or update the mutable HEAD.
