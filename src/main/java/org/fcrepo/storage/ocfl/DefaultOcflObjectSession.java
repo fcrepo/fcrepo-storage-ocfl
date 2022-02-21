@@ -424,6 +424,16 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     @Override
+    public void invalidateCache(final String resourceId) {
+        try {
+            listVersions(resourceId).stream()
+                .map(version -> cacheKey(resourceId, version.getVersionNumber()))
+                .forEach(headersCache::invalidate);
+        } catch (NotFoundException ignored) {
+        }
+    }
+
+    @Override
     public void commitType(final CommitType commitType) {
         this.commitType = Objects.requireNonNull(commitType, "commitType cannot be null");
     }
