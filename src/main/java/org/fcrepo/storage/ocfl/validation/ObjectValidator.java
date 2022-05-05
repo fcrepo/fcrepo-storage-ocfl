@@ -93,7 +93,9 @@ public class ObjectValidator {
 
             objDetails.getVersionMap().forEach((versionNum, versionDetails) -> {
                 try {
-                    validateVersion(versionNum, versionDetails);
+                    if (!isEmptyFirstVersion(versionNum, versionDetails)) {
+                        validateVersion(versionNum, versionDetails);
+                    }
                 } catch (ContinueException e) {
                     // Ignore -- this just means that a version is invalid
                     // but we still want to look at the other versions.
@@ -104,6 +106,19 @@ public class ObjectValidator {
             });
 
             context.throwValidationException();
+        }
+
+        /**
+         * When the mutable head extension is used and a new object is created, then the first version of the object
+         * is necessarily empty. This version should NOT be validated.
+         *
+         * @param versionNum the version number
+         * @param versionDetails the version's details
+         * @return true if it's an empty v1
+         */
+        private boolean isEmptyFirstVersion(final VersionNum versionNum,
+                                            final VersionDetails versionDetails) {
+            return versionNum.equals(VersionNum.V1) && versionDetails.getFiles().isEmpty();
         }
 
         private void validateVersion(final VersionNum versionNum, final VersionDetails versionDetails) {

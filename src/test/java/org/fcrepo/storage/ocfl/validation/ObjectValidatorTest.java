@@ -125,6 +125,15 @@ public class ObjectValidatorTest {
     }
 
     @Test
+    public void validAtomicNonRdfResourceMutableHead() {
+        writeAndCommitMutable(defaultId,
+                ResourceUtils.atomicBinary(defaultId, ROOT_RESOURCE, "blah"),
+                ResourceUtils.atomicDesc(defaultDescId, defaultId, "blah desc"));
+
+        objectValidator.validate(defaultId, true);
+    }
+
+    @Test
     public void validAtomicRdfResource() {
         writeAndCommit(defaultId,
                 ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, "blah"));
@@ -1033,6 +1042,15 @@ public class ObjectValidatorTest {
 
     private void writeAndCommit(final String id, final ResourceContent... content) {
         final var session = sessionFactory.newSession(id);
+        for (var c : content) {
+            session.writeResource(c.getHeaders(), c.getContentStream().orElse(null));
+        }
+        session.commit();
+    }
+
+    private void writeAndCommitMutable(final String id, final ResourceContent... content) {
+        final var session = sessionFactory.newSession(id);
+        session.commitType(CommitType.UNVERSIONED);
         for (var c : content) {
             session.writeResource(c.getHeaders(), c.getContentStream().orElse(null));
         }
