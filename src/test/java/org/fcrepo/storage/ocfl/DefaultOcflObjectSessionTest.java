@@ -43,14 +43,13 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.List;
 import java.util.stream.Collectors;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
@@ -1637,7 +1636,7 @@ public class DefaultOcflObjectSessionTest {
         final var versionNums = actual.stream()
                 .map(OcflVersionInfo::getVersionNumber)
                 .collect(Collectors.toList());
-        assertThat(versionNums, contains(expected));
+        assertThat(versionNums, containsInAnyOrder(expected));
     }
 
     /**
