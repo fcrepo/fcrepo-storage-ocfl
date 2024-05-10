@@ -9,7 +9,7 @@ package org.fcrepo.storage.ocfl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
-import edu.wisc.library.ocfl.api.MutableOcflRepository;
+import io.ocfl.api.MutableOcflRepository;
 import org.fcrepo.storage.ocfl.cache.Cache;
 import org.fcrepo.storage.ocfl.validation.DefaultHeadersValidator;
 import org.fcrepo.storage.ocfl.validation.HeadersValidator;
