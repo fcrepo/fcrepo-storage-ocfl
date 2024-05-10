@@ -10,15 +10,15 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.google.common.collect.Streams;
-import edu.wisc.library.ocfl.api.MutableOcflRepository;
-import edu.wisc.library.ocfl.api.OcflObjectUpdater;
-import edu.wisc.library.ocfl.api.OcflOption;
-import edu.wisc.library.ocfl.api.model.DigestAlgorithm;
-import edu.wisc.library.ocfl.api.model.FileChangeType;
-import edu.wisc.library.ocfl.api.model.FileDetails;
-import edu.wisc.library.ocfl.api.model.ObjectVersionId;
-import edu.wisc.library.ocfl.api.model.VersionInfo;
-import edu.wisc.library.ocfl.api.model.VersionNum;
+import io.ocfl.api.MutableOcflRepository;
+import io.ocfl.api.OcflObjectUpdater;
+import io.ocfl.api.OcflOption;
+import io.ocfl.api.model.DigestAlgorithm;
+import io.ocfl.api.model.FileChangeType;
+import io.ocfl.api.model.FileDetails;
+import io.ocfl.api.model.ObjectVersionId;
+import io.ocfl.api.model.VersionInfo;
+import io.ocfl.api.model.VersionNum;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.SystemUtils;
@@ -597,7 +597,7 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                     }
                 }
             }
-        } catch (final edu.wisc.library.ocfl.api.exception.NotFoundException e) {
+        } catch (final io.ocfl.api.exception.NotFoundException e) {
             return Optional.empty();
         }
         return Optional.empty();

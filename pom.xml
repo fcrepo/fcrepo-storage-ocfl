@@ -22,7 +22,7 @@
     <checkstyle.plugin.version>3.1.1</checkstyle.plugin.version>
     <source.plugin.version>3.0.1</source.plugin.version>
     <javadoc.plugin.version>3.2.0</javadoc.plugin.version>
-    <ocfl-java.version>1.5.0</ocfl-java.version>
+    <ocfl-java.version>2.0.1</ocfl-java.version>
     <sonatype.host>s01.oss.sonatype.org</sonatype.host>
   </properties>
 
@@ -153,7 +153,7 @@
 
   <dependencies>
     <dependency>
-      <groupId>edu.wisc.library.ocfl</groupId>
+      <groupId>io.ocfl</groupId>
       <artifactId>ocfl-java-core</artifactId>
       <version>${ocfl-java.version}</version>
       <exclusions>
