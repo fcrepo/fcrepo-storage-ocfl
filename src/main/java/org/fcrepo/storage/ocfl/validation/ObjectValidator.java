@@ -7,13 +7,13 @@
 package org.fcrepo.storage.ocfl.validation;
 
 import com.fasterxml.jackson.databind.ObjectReader;
-import edu.wisc.library.ocfl.api.MutableOcflRepository;
-import edu.wisc.library.ocfl.api.exception.FixityCheckException;
-import edu.wisc.library.ocfl.api.model.ObjectDetails;
-import edu.wisc.library.ocfl.api.model.ObjectVersionId;
-import edu.wisc.library.ocfl.api.model.OcflObjectVersion;
-import edu.wisc.library.ocfl.api.model.VersionDetails;
-import edu.wisc.library.ocfl.api.model.VersionNum;
+import io.ocfl.api.MutableOcflRepository;
+import io.ocfl.api.exception.FixityCheckException;
+import io.ocfl.api.model.ObjectDetails;
+import io.ocfl.api.model.ObjectVersionId;
+import io.ocfl.api.model.OcflObjectVersion;
+import io.ocfl.api.model.VersionDetails;
+import io.ocfl.api.model.VersionNum;
 import org.apache.commons.lang3.StringUtils;
 import org.fcrepo.storage.ocfl.InteractionModel;
 import org.fcrepo.storage.ocfl.PersistencePaths;
