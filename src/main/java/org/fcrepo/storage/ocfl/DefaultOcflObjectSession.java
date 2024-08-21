@@ -18,6 +18,7 @@ import io.ocfl.api.model.FileChangeType;
 import io.ocfl.api.model.FileDetails;
 import io.ocfl.api.model.ObjectVersionId;
 import io.ocfl.api.model.OcflObjectVersion;
+import io.ocfl.api.model.OcflObjectVersionFile;
 import io.ocfl.api.model.VersionInfo;
 import io.ocfl.api.model.VersionNum;
 import org.apache.commons.codec.binary.Hex;
@@ -339,9 +340,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
         return headersCache.get(cacheKey(resourceId, resolvedVersionNum), key -> {
             LOG.trace("Cache miss for {}", key);
-            final var headerStream = readFromOcfl(headerPath, resourceId, resolvedVersionNum);
-            final var path = readStorageRelativePath(headerPath).orElse(null);
-            final var headers = parseHeaders(headerStream);
+            final var ocflFileDetails = getObjectVersionFile(headerPath, resolvedVersionNum)
+                    .orElseThrow(() -> notFoundException(headerPath, resourceId));
+            final var path = ocflFileDetails.getStorageRelativePath();
+            final var headers = parseHeaders(ocflFileDetails.getStream());
             if (path != null) {
                 headers.setStorageRelativePath(path);
             }
@@ -562,11 +564,6 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
                 .orElseThrow(() -> notFoundException(path, resourceId));
     }
 
-    private InputStream readFromOcfl(final PathPair path, final String resourceId, final String versionNumber) {
-        return readFromOcflOptional(path, versionNumber)
-                .orElseThrow(() -> notFoundException(path, resourceId));
-    }
-
     private Optional<InputStream> readStreamOptional(final PathPair path, final String versionNumber) {
         if (isOpen() && deletePaths.contains(path)) {
             return Optional.empty();
@@ -606,12 +603,12 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         return Optional.empty();
     }
 
-    private Optional<String> readStorageRelativePath(final PathPair path) {
-        final var object = getObject(null);
+    private Optional<OcflObjectVersionFile> getObjectVersionFile(final PathPair path, final String versionNumber) {
+        final var object = getObject(versionNumber);
         if (object.isPresent()) {
             try {
                 if (object.get().containsFile(path.path)) {
-                    return Optional.of(object.get().getFile(path.path).getStorageRelativePath());
+                    return Optional.of(object.get().getFile(path.path));
                 }
             } catch (final io.ocfl.api.exception.NotFoundException e) {
                 return Optional.empty();
@@ -807,10 +804,14 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private void loadRootResourceId() {
         if (containsOcflObject()) {
             rootResourceId = rootIdCache.get(ocflObjectId, ocflObjectId -> {
-                final var stream = readFromOcflOptional(encode(PersistencePaths.ROOT_HEADER_PATH), null);
+                final var object = getObjectVersionFile(encode(PersistencePaths.ROOT_HEADER_PATH), null);
 
-                if (stream.isPresent()) {
-                    final var headers = parseHeaders(stream.get());
+                if (object.isPresent()) {
+                    final var headers = parseHeaders(object.get().getStream());
+                    final var path = object.get().getStorageRelativePath();
+                    if (path != null) {
+                        headers.setStorageRelativePath(path);
+                    }
                     final var headVersion = ocflRepo.describeVersion(ObjectVersionId.head(ocflObjectId));
                     addToCache(headers.getId(), headVersion.getVersionNum().toString(), headers);
                     return headers.getId();
