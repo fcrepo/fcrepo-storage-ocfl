@@ -989,6 +989,12 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
 
     private void moveStagedHeadersToCache(final String newVersionNum) {
         stagedHeaders.forEach((id, headers) -> {
+            final var pathpair = new PathPair(resolvePersistencePaths(headers).getHeaderFilePath(), null);
+            final var ocflFileDetails = getObjectVersionFile(pathpair, newVersionNum);
+            if (ocflFileDetails.isPresent()) {
+                final var path = ocflFileDetails.get().getStorageRelativePath();
+                headers.setStorageRelativePath(path);
+            }
             addToCache(id, newVersionNum, headers);
         });
         stagedHeaders.clear();
