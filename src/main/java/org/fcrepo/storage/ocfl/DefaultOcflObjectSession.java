@@ -17,7 +17,6 @@ import io.ocfl.api.model.DigestAlgorithm;
 import io.ocfl.api.model.FileChangeType;
 import io.ocfl.api.model.FileDetails;
 import io.ocfl.api.model.ObjectVersionId;
-import io.ocfl.api.model.OcflObjectVersion;
 import io.ocfl.api.model.OcflObjectVersionFile;
 import io.ocfl.api.model.VersionInfo;
 import io.ocfl.api.model.VersionNum;
@@ -590,11 +589,14 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         return Optional.empty();
     }
 
-    private Optional<OcflObjectVersion> getObject(final String versionNumber) {
+    private Optional<OcflObjectVersionFile> getObjectVersionFile(final PathPair path, final String versionNumber) {
         try {
             if (!(deleteObject && isOpen())) {
                 if (containsOcflObject()) {
-                    return Optional.of(ocflRepo.getObject(ObjectVersionId.version(ocflObjectId, versionNumber)));
+                    final var object = ocflRepo.getObject(ObjectVersionId.version(ocflObjectId, versionNumber));
+                    if (object.containsFile(path.path)) {
+                        return Optional.of(object.getFile(path.path));
+                    }
                 }
             }
         } catch (final io.ocfl.api.exception.NotFoundException e) {
@@ -603,32 +605,9 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         return Optional.empty();
     }
 
-    private Optional<OcflObjectVersionFile> getObjectVersionFile(final PathPair path, final String versionNumber) {
-        final var object = getObject(versionNumber);
-        if (object.isPresent()) {
-            try {
-                if (object.get().containsFile(path.path)) {
-                    return Optional.of(object.get().getFile(path.path));
-                }
-            } catch (final io.ocfl.api.exception.NotFoundException e) {
-                return Optional.empty();
-            }
-        }
-        return Optional.empty();
-    }
-
     private Optional<InputStream> readFromOcflOptional(final PathPair path, final String versionNumber) {
-        final var object = getObject(versionNumber);
-        if (object.isPresent()) {
-            try {
-                if (object.get().containsFile(path.path)) {
-                    return Optional.of(object.get().getFile(path.path).getStream());
-                }
-            } catch (final io.ocfl.api.exception.NotFoundException e) {
-                return Optional.empty();
-            }
-        }
-        return Optional.empty();
+        final var objectFile = getObjectVersionFile(path, versionNumber);
+        return objectFile.map(OcflObjectVersionFile::getStream);
     }
 
     private Path stagingPath(final PathPair path) {
