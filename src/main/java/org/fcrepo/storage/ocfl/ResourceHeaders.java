@@ -50,6 +50,8 @@ public class ResourceHeaders {
     private final boolean deleted;
     private final String contentPath;
     private final String headersVersion;
+    // A read-only field of the path of the resource relative to the storage root, if persisted.
+    private String storageRelativePath = null;
 
     public static Builder builder() {
         return new Builder();
@@ -291,6 +293,17 @@ public class ResourceHeaders {
         return headersVersion;
     }
 
+    /**
+     * @return the path of the resource relative to the storage root
+     */
+    public String getStorageRelativePath() {
+        return storageRelativePath;
+    }
+
+    protected void setStorageRelativePath(final String storageRelativePath) {
+        this.storageRelativePath = storageRelativePath;
+    }
+
     @Override
     public String toString() {
         return "ResourceHeaders{" +
@@ -315,6 +328,7 @@ public class ResourceHeaders {
                 ", deleted=" + deleted +
                 ", contentPath='" + contentPath + '\'' +
                 ", headersVersion='" + headersVersion + '\'' +
+                ", storageRelativePath='" + storageRelativePath + '\'' +
                 '}';
     }
 
