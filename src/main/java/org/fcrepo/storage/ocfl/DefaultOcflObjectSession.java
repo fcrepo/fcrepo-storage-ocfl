@@ -41,14 +41,10 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
-import java.nio.channels.Channels;
-import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.security.DigestInputStream;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -373,12 +369,13 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     @Override
-    public ResourceContent readRange(String resourceId, long startPosition, long endPosition) {
+    public ResourceContent readRange(final String resourceId, final long startPosition, final long endPosition) {
         return readRange(resourceId, null, startPosition, endPosition);
     }
 
     @Override
-    public ResourceContent readRange(String resourceId, String versionNumber, long startPosition, long endPosition) {
+    public ResourceContent readRange(final String resourceId, final String versionNumber,
+                                     final long startPosition, final long endPosition) {
         ensureKnownRootResource();
 
         final var headers = readHeaders(resourceId, versionNumber);
