@@ -56,6 +56,7 @@ import static org.hamcrest.Matchers.empty;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1559,6 +1560,116 @@ public class DefaultOcflObjectSessionTest {
 
         write(session, content);
         session.commit();
+    }
+
+    @Test
+    public void readRangeValidPartial() {
+        readRangeReturnsExpectedContent("Test time in fcrepo storage",
+                "time in fcrepo",
+                5, 18);
+    }
+
+    @Test
+    public void readRangeValidWhole() {
+        readRangeReturnsExpectedContent("Test time in fcrepo storage",
+                "Test time in fcrepo storage",
+                0, 27);
+    }
+
+    @Test
+    public void readRangeEndGreaterThanSize() {
+        readRangeReturnsExpectedContent("Test time in fcrepo storage",
+                "time in fcrepo storage",
+                5, 999);
+    }
+
+    @Test
+    public void readRangeStartGreaterThanSize() {
+        readRangeReturnsExpectedContent("Test time in fcrepo storage",
+                "",
+                998, 999);
+    }
+
+    @Test
+    public void readRangeNegativeStart() {
+        readRangeReturnsExpectedContent("Test time in fcrepo storage",
+                "Test time in fcrepo storage",
+                -3, 100);
+    }
+
+    @Test
+    public void readRangeNegativeEnd() {
+        readRangeReturnsExpectedContent("Test time in fcrepo storage",
+                "",
+                0, -1);
+    }
+
+    public void readRangeReturnsExpectedContent(final String originalStr, final String expectedStr,
+                                                final int start, final int end) {
+        final var resourceId = "info:fedora/foo/bar";
+        final var session = sessionFactory.newSession(resourceId);
+        final var content = ResourceUtils.atomicBinary(resourceId, "info:fedora/foo", originalStr);
+
+        write(session, content);
+
+        final var stagedContent = session.readRange(resourceId, start, end);
+        assertResourceContent(expectedStr, content, stagedContent);
+
+        session.commit();
+
+        final var committedContent = session.readRange(resourceId, start, end);
+        assertResourceContent(expectedStr, content, committedContent);
+    }
+
+    @Test
+    public void readRangePreviousVersion() {
+        final var resourceId = "info:fedora/foo";
+
+        final var first = ResourceUtils.atomicBinary(resourceId, ROOT, "first");
+        final var second = ResourceUtils.atomicBinary(resourceId, ROOT, "second");
+        final var third = ResourceUtils.atomicBinary(resourceId, ROOT, "third");
+
+        final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session1, first);
+        session1.commit();
+
+        final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session2, second);
+        session2.commit();
+
+        final var session3 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session3, third);
+        session3.commit();
+
+        assertResourceContent("rst", first, session3.readRange(resourceId, "v1", 2, 4));
+        assertResourceContent("con", second, session3.readRange(resourceId, "v2", 2, 4));
+        assertResourceContent("ird", third, session3.readRange(resourceId, "v3", 2, 4));
+
+        try {
+            session3.readRange(resourceId, "v4", 2, 4);
+            fail("Expected an exception because the version should not exist");
+        } catch (NotFoundException e) {
+            // expected exception
+        }
+    }
+
+    @Test
+    public void readRangeDeletedFile() {
+        final var resourceId = "info:fedora/foo";
+
+        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "first");
+        final var session = sessionFactory.newSession(resourceId);
+
+        write(session, content);
+        session.commit();
+
+        final var session2 = sessionFactory.newSession(resourceId);
+
+        session2.deleteContentFile(ResourceHeaders.builder(content.getHeaders())
+                .withDeleted(true)
+                .build());
+
+        assertThrows(NotFoundException.class, () -> session2.readRange(resourceId, "v1", 2, 4));
     }
 
     private void assertResourceContent(final String content,
