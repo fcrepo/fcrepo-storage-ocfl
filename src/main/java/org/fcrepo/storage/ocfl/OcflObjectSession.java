@@ -112,6 +112,29 @@ public interface OcflObjectSession extends AutoCloseable {
     ResourceContent readContent(final String resourceId, final String versionNumber);
 
     /**
+     * Reads a range of bytes of a resource's content.
+     *
+     * @param resourceId the Fedora resource id to read
+     * @param startPosition the position to start reading from, inclusive
+     * @param endPosition the position to stop reading at, inclusive
+     * @return the range of the resources content
+     */
+    ResourceContent readRange(final String resourceId,
+                              final long startPosition, final long endPosition);
+
+    /**
+     * Reads a range of bytes from a specific version of a resource's content.
+     *
+     * @param resourceId the Fedora resource id to read
+     * @param versionNumber the version to read, or null for HEAD
+     * @param startPosition the position to start reading from, inclusive
+     * @param endPosition the position to stop reading at, inclusive
+     * @return the range of the resources content
+     */
+    ResourceContent readRange(final String resourceId, final String versionNumber,
+                              final long startPosition, final long endPosition);
+
+    /**
      * List all of the versions associated to the resource in chrolological order.
      *
      * @param resourceId the Fedora resource id
