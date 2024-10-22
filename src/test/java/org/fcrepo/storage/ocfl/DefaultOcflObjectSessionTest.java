@@ -30,6 +30,8 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -43,9 +45,8 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
@@ -55,7 +56,6 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -65,7 +65,8 @@ import static org.junit.Assert.fail;
  */
 @RunWith(Parameterized.class)
 public class DefaultOcflObjectSessionTest {
-
+    public static final Instant ORIGINAL_TIMESTAMP = Instant.parse("2024-10-10T10:10:05.447609300Z");
+    public static final Instant UPDATED_TIMESTAMP = Instant.parse("2024-10-10T10:10:22.053500010Z");
     @Rule
     public TemporaryFolder temp = TemporaryFolder.builder().assureDeletion().build();
 
@@ -1270,36 +1271,53 @@ public class DefaultOcflObjectSessionTest {
 
     @Test
     public void touchAgWhenAgPartUpdated() {
-        close(defaultAg());
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
+            close(defaultAg());
 
-        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-        assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
+            final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+            assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
+        }
 
-        close(defaultAgBinary());
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
+            close(defaultAgBinary());
 
-        assertVersions(session.listVersions(DEFAULT_AG_ID), "v1", "v2");
-        assertVersions(session.listVersions(DEFAULT_AG_BINARY_ID), "v2");
+            final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+            assertVersions(session.listVersions(DEFAULT_AG_ID), "v1", "v2");
+            assertVersions(session.listVersions(DEFAULT_AG_BINARY_ID), "v2");
+        }
     }
 
     @Test
     public void touchingShouldUseTheTimestampFromTheLastUpdatedResource() throws InterruptedException {
-        close(defaultAg());
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
 
-        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-        assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
+            close(defaultAg());
 
-        final var binary = ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "bar");
-        final var timestamp = binary.getHeaders().getLastModifiedDate();
+            final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+            assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
 
-        TimeUnit.SECONDS.sleep(1);
+            final var agHeaders = session.readHeaders(DEFAULT_AG_ID);
+            assertEquals(ORIGINAL_TIMESTAMP, agHeaders.getMementoCreatedDate());
+        }
 
-        final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
-        write(session2, binary);
-        session2.commit();
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
 
-        final var agHeaders = session2.readHeaders(DEFAULT_AG_ID);
-        assertEquals(timestamp, agHeaders.getMementoCreatedDate());
-        assertNotEquals(timestamp, agHeaders.getLastModifiedDate());
+            final var binary = ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "bar");
+
+            final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
+            write(session2, binary);
+            session2.commit();
+
+            final var agHeaders = session2.readHeaders(DEFAULT_AG_ID);
+            // AG memento should be updated to the time the binary was updated
+            assertEquals(UPDATED_TIMESTAMP, agHeaders.getMementoCreatedDate());
+            // AG last modified should be unchanged from when the AG was created, not when the binary was updated
+            assertEquals(ORIGINAL_TIMESTAMP, agHeaders.getLastModifiedDate());
+        }
     }
 
     @Test
@@ -1376,29 +1394,37 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void touchBinaryWhenBinaryDescMementoCreated() {
         final var resourceId = "info:fedora/foo";
-        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "foo");
-
         final var descId = "info:fedora/foo/fcr:metadata";
-        final var descContent = ResourceUtils.atomicDesc(descId, resourceId, "desc");
 
-        final var session = sessionFactory.newSession(resourceId);
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
 
-        write(session, content);
-        write(session, descContent);
-        session.commit();
+            final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "foo");
+            final var descContent = ResourceUtils.atomicDesc(descId, resourceId, "desc");
 
-        assertVersions(session.listVersions(resourceId), "v1");
-        assertVersions(session.listVersions(descId), "v1");
+            final var session = sessionFactory.newSession(resourceId);
 
-        final var session2 = sessionFactory.newSession(resourceId);
+            write(session, content);
+            write(session, descContent);
+            session.commit();
 
-        session2.writeHeaders(ResourceHeaders.builder(session.readHeaders(descId))
-                .withMementoCreatedDate(Instant.now())
-                .build());
-        session2.commit();
+            assertVersions(session.listVersions(resourceId), "v1");
+            assertVersions(session.listVersions(descId), "v1");
+        }
 
-        assertVersions(session.listVersions(resourceId), "v1", "v2");
-        assertVersions(session.listVersions(descId), "v1", "v2");
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
+
+            final var session2 = sessionFactory.newSession(resourceId);
+
+            session2.writeHeaders(ResourceHeaders.builder(session2.readHeaders(descId))
+                    .withMementoCreatedDate(Instant.now())
+                    .build());
+            session2.commit();
+
+            assertVersions(session2.listVersions(resourceId), "v1", "v2");
+            assertVersions(session2.listVersions(descId), "v1", "v2");
+        }
     }
 
     @Test
@@ -1521,32 +1547,39 @@ public class DefaultOcflObjectSessionTest {
 
     @Test
     public void testDeleteChildInAgUpdatesAg() throws Exception {
-        // Create AG and child resource
-        final var ag = defaultAg();
-        final var binaryChild = defaultAgBinary();
-        close(ag);
-        close(binaryChild);
-        // Time passes
-        Thread.sleep(1000);
 
-        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-        final var now = Instant.now();
-        // Mark the child as deleted
-        final var deleteHeaders = ResourceHeaders.builder(binaryChild.getHeaders())
-                .withContentPath(null)
-                .withContentSize(-1)
-                .withDigests(null)
-                .withDeleted(true)
-                .withLastModifiedDate(now)
-                .withMementoCreatedDate(now)
-                .withStateToken(ResourceUtils.getStateToken(now))
-                .build();
-        session.deleteContentFile(deleteHeaders);
+        final ResourceContent ag;
+        final ResourceContent binaryChild;
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
+            // Create AG and child resource
+            ag = defaultAg();
+            binaryChild = defaultAgBinary();
+            close(ag);
+            close(binaryChild);
+        }
 
-        // The AG should have an updated timestamp to indicate it was altered
-        final var correctAg = touch(ag, deleteHeaders);
-        final var resources = listHeaders(session);
-        assertHeaders(resources, correctAg.getHeaders(), deleteHeaders);
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
+            final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+            final var now = Instant.now();
+            // Mark the child as deleted
+            final var deleteHeaders = ResourceHeaders.builder(binaryChild.getHeaders())
+                    .withContentPath(null)
+                    .withContentSize(-1)
+                    .withDigests(null)
+                    .withDeleted(true)
+                    .withLastModifiedDate(now)
+                    .withMementoCreatedDate(now)
+                    .withStateToken(ResourceUtils.getStateToken(now))
+                    .build();
+            session.deleteContentFile(deleteHeaders);
+
+            // The AG should have an updated timestamp to indicate it was altered
+            final var correctAg = touch(ag, deleteHeaders);
+            final var resources = listHeaders(session);
+            assertHeaders(resources, correctAg.getHeaders(), deleteHeaders);
+        }
     }
 
     @Test(expected = ValidationException.class)
