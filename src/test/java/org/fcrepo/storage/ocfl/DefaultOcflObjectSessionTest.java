@@ -1340,55 +1340,74 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void touchBinaryWhenDescUpdated() {
         final var resourceId = "info:fedora/foo";
-        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "foo");
-
         final var descId = "info:fedora/foo/fcr:metadata";
-        final var descContent = ResourceUtils.atomicDesc(descId, resourceId, "desc");
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
 
-        final var session = sessionFactory.newSession(resourceId);
+            final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "foo");
+            final var descContent = ResourceUtils.atomicDesc(descId, resourceId, "desc");
 
-        write(session, content);
-        write(session, descContent);
-        session.commit();
+            final var session = sessionFactory.newSession(resourceId);
 
-        assertVersions(session.listVersions(resourceId), "v1");
-        assertVersions(session.listVersions(descId), "v1");
+            write(session, content);
+            write(session, descContent);
+            session.commit();
+        }
 
-        final var session2 = sessionFactory.newSession(resourceId);
-        final var descContent2 = ResourceUtils.atomicDesc(descId, resourceId, "desc2");
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
 
-        write(session2, descContent2);
-        session2.commit();
+            final var session = sessionFactory.newSession(resourceId);
 
-        assertVersions(session.listVersions(resourceId), "v1", "v2");
-        assertVersions(session.listVersions(descId), "v1", "v2");
+            assertVersions(session.listVersions(resourceId), "v1");
+            assertVersions(session.listVersions(descId), "v1");
+
+            final var session2 = sessionFactory.newSession(resourceId);
+            final var descContent2 = ResourceUtils.atomicDesc(descId, resourceId, "desc2");
+
+            write(session2, descContent2);
+            session2.commit();
+
+            assertVersions(session.listVersions(resourceId), "v1", "v2");
+            assertVersions(session.listVersions(descId), "v1", "v2");
+        }
     }
 
     @Test
     public void touchBinaryDescWhenBinaryUpdated() {
         final var resourceId = "info:fedora/foo";
-        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "foo");
-
         final var descId = "info:fedora/foo/fcr:metadata";
-        final var descContent = ResourceUtils.atomicDesc(descId, resourceId, "desc");
 
-        final var session = sessionFactory.newSession(resourceId);
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
 
-        write(session, content);
-        write(session, descContent);
-        session.commit();
+            final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "foo");
+            final var descContent = ResourceUtils.atomicDesc(descId, resourceId, "desc");
 
-        assertVersions(session.listVersions(resourceId), "v1");
-        assertVersions(session.listVersions(descId), "v1");
+            final var session = sessionFactory.newSession(resourceId);
 
-        final var session2 = sessionFactory.newSession(resourceId);
-        final var content2 = ResourceUtils.atomicBinary(resourceId, ROOT, "bar");
+            write(session, content);
+            write(session, descContent);
+            session.commit();
+        }
 
-        write(session2, content2);
-        session2.commit();
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
 
-        assertVersions(session.listVersions(resourceId), "v1", "v2");
-        assertVersions(session.listVersions(descId), "v1", "v2");
+            final var session = sessionFactory.newSession(resourceId);
+
+            assertVersions(session.listVersions(resourceId), "v1");
+            assertVersions(session.listVersions(descId), "v1");
+
+            final var session2 = sessionFactory.newSession(resourceId);
+            final var content2 = ResourceUtils.atomicBinary(resourceId, ROOT, "bar");
+
+            write(session2, content2);
+            session2.commit();
+
+            assertVersions(session.listVersions(resourceId), "v1", "v2");
+            assertVersions(session.listVersions(descId), "v1", "v2");
+        }
     }
 
     @Test
