@@ -1559,7 +1559,7 @@ public class DefaultOcflObjectSessionTest {
         }
 
         // Update a subset of resources again -- mutable head
-        var timestamp3 = Instant.parse("2024-10-10T10:10:25.853500010Z");
+        final var timestamp3 = Instant.parse("2024-10-10T10:10:25.853500010Z");
         try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
             mockInstant.when(Instant::now).thenReturn(timestamp3);
 
@@ -1579,7 +1579,7 @@ public class DefaultOcflObjectSessionTest {
         }
 
         // Commit mutable head
-        var timestamp4 = Instant.parse("2024-10-10T10:10:26.853500010Z");
+        final var timestamp4 = Instant.parse("2024-10-10T10:10:26.853500010Z");
         try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
             mockInstant.when(Instant::now).thenReturn(timestamp4);
 
