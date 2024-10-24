@@ -67,6 +67,7 @@ import static org.junit.Assert.fail;
 public class DefaultOcflObjectSessionTest {
     public static final Instant ORIGINAL_TIMESTAMP = Instant.parse("2024-10-10T10:10:05.447609300Z");
     public static final Instant UPDATED_TIMESTAMP = Instant.parse("2024-10-10T10:10:22.053500010Z");
+    public static final Instant UPDATED_TIMESTAMP2 = Instant.parse("2024-10-10T10:10:24.853500010Z");
     @Rule
     public TemporaryFolder temp = TemporaryFolder.builder().assureDeletion().build();
 
@@ -858,25 +859,36 @@ public class DefaultOcflObjectSessionTest {
     public void listAgVersions() {
         final var binary2Id = DEFAULT_AG_ID + "/baz";
 
-        final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
 
-        write(session1, ResourceUtils.ag(DEFAULT_AG_ID, ROOT, "ag"));
-        write(session1, ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "binary"));
-        session1.commit();
+            final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
+            write(session1, ResourceUtils.ag(DEFAULT_AG_ID, ROOT, "ag"));
+            write(session1, ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "binary"));
+            session1.commit();
+        }
 
-        write(session2, ResourceUtils.partBinary(binary2Id, DEFAULT_AG_ID, DEFAULT_AG_ID, "binary2"));
-        session2.commit();
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
+            final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        final var session3 = sessionFactory.newSession(DEFAULT_AG_ID);
+            write(session2, ResourceUtils.partBinary(binary2Id, DEFAULT_AG_ID, DEFAULT_AG_ID, "binary2"));
+            session2.commit();
+        }
 
-        write(session3, ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "updated"));
-        session3.commit();
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP2);
 
-        assertVersions(session3.listVersions(DEFAULT_AG_ID), "v1", "v2", "v3");
-        assertVersions(session3.listVersions(DEFAULT_AG_BINARY_ID), "v1", "v3");
-        assertVersions(session3.listVersions(binary2Id), "v2");
+            final var session3 = sessionFactory.newSession(DEFAULT_AG_ID);
+
+            write(session3, ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "updated"));
+            session3.commit();
+
+            assertVersions(session3.listVersions(DEFAULT_AG_ID), "v1", "v2", "v3");
+            assertVersions(session3.listVersions(DEFAULT_AG_BINARY_ID), "v1", "v3");
+            assertVersions(session3.listVersions(binary2Id), "v2");
+        }
     }
 
     @Test(expected = NotFoundException.class)
@@ -1488,80 +1500,97 @@ public class DefaultOcflObjectSessionTest {
         final var binary2Id = "info:fedora/foo/bar/boz";
 
         // Create initial resources -- mutable head
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
 
-        final var session = sessionFactory.newSession(agId);
-        session.commitType(CommitType.UNVERSIONED);
+            final var session = sessionFactory.newSession(agId);
+            session.commitType(CommitType.UNVERSIONED);
 
-        final var agContent = ResourceUtils.ag(agId, ROOT, "foo");
-        final var containerContent = ResourceUtils.partContainer(containerId, agId, agId, "bar");
-        final var binaryContent = ResourceUtils.partBinary(binaryId, containerId, agId, "baz");
-        final var binary2Content = ResourceUtils.partBinary(binary2Id, containerId, agId, "boz");
+            final var agContent = ResourceUtils.ag(agId, ROOT, "foo");
+            final var containerContent = ResourceUtils.partContainer(containerId, agId, agId, "bar");
+            final var binaryContent = ResourceUtils.partBinary(binaryId, containerId, agId, "baz");
+            final var binary2Content = ResourceUtils.partBinary(binary2Id, containerId, agId, "boz");
 
-        write(session, agContent);
-        write(session, containerContent);
-        write(session, binaryContent);
-        write(session, binary2Content);
+            write(session, agContent);
+            write(session, containerContent);
+            write(session, binaryContent);
+            write(session, binary2Content);
 
-        session.commit();
+            session.commit();
 
-        assertEquals(0, session.listVersions(agId).size());
-        assertEquals(0, session.listVersions(containerId).size());
-        assertEquals(0, session.listVersions(binaryId).size());
-        assertEquals(0, session.listVersions(binary2Id).size());
+            assertEquals(0, session.listVersions(agId).size());
+            assertEquals(0, session.listVersions(containerId).size());
+            assertEquals(0, session.listVersions(binaryId).size());
+            assertEquals(0, session.listVersions(binary2Id).size());
+        }
 
         // Commit mutable head
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
 
-        final var session2 = sessionFactory.newSession(agId);
-        session2.commit();
+            final var session2 = sessionFactory.newSession(agId);
+            session2.commit();
 
-        assertVersions(session2.listVersions(agId), "v2");
-        assertVersions(session2.listVersions(containerId), "v2");
-        assertVersions(session2.listVersions(binaryId), "v2");
-        assertVersions(session2.listVersions(binary2Id), "v2");
+            assertVersions(session2.listVersions(agId), "v2");
+            assertVersions(session2.listVersions(containerId), "v2");
+            assertVersions(session2.listVersions(binaryId), "v2");
+            assertVersions(session2.listVersions(binary2Id), "v2");
+        }
 
         // Update a subset of resources -- mutable head
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP2);
 
-        final var session3 = sessionFactory.newSession(agId);
-        session3.commitType(CommitType.UNVERSIONED);
+            final var session3 = sessionFactory.newSession(agId);
+            session3.commitType(CommitType.UNVERSIONED);
 
-        final var containerContentV2 = ResourceUtils.partContainer(containerId, agId, agId, "bar - 2");
-        final var binaryContentV2 = ResourceUtils.partBinary(binaryId, containerId, agId, "baz - 2");
+            final var containerContentV2 = ResourceUtils.partContainer(containerId, agId, agId, "bar - 2");
+            final var binaryContentV2 = ResourceUtils.partBinary(binaryId, containerId, agId, "baz - 2");
 
-        write(session3, containerContentV2);
-        write(session3, binaryContentV2);
+            write(session3, containerContentV2);
+            write(session3, binaryContentV2);
 
-        session3.commit();
+            session3.commit();
 
-        assertVersions(session3.listVersions(agId), "v2");
-        assertVersions(session3.listVersions(containerId), "v2");
-        assertVersions(session3.listVersions(binaryId), "v2");
-        assertVersions(session3.listVersions(binary2Id), "v2");
+            assertVersions(session3.listVersions(agId), "v2");
+            assertVersions(session3.listVersions(containerId), "v2");
+            assertVersions(session3.listVersions(binaryId), "v2");
+            assertVersions(session3.listVersions(binary2Id), "v2");
+        }
 
         // Update a subset of resources again -- mutable head
+        var timestamp3 = Instant.parse("2024-10-10T10:10:25.853500010Z");
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(timestamp3);
 
-        final var session4 = sessionFactory.newSession(agId);
-        session4.commitType(CommitType.UNVERSIONED);
+            final var session4 = sessionFactory.newSession(agId);
+            session4.commitType(CommitType.UNVERSIONED);
 
-        final var containerContentV3 = ResourceUtils.partContainer(containerId, agId, agId, "bar - 3");
+            final var containerContentV3 = ResourceUtils.partContainer(containerId, agId, agId, "bar - 3");
 
-        write(session4, containerContentV3);
+            write(session4, containerContentV3);
 
-        session4.commit();
+            session4.commit();
 
-        assertVersions(session4.listVersions(agId), "v2");
-        assertVersions(session4.listVersions(containerId), "v2");
-        assertVersions(session4.listVersions(binaryId), "v2");
-        assertVersions(session4.listVersions(binary2Id), "v2");
+            assertVersions(session4.listVersions(agId), "v2");
+            assertVersions(session4.listVersions(containerId), "v2");
+            assertVersions(session4.listVersions(binaryId), "v2");
+            assertVersions(session4.listVersions(binary2Id), "v2");
+        }
 
         // Commit mutable head
+        var timestamp4 = Instant.parse("2024-10-10T10:10:26.853500010Z");
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(timestamp4);
 
-        final var session5 = sessionFactory.newSession(agId);
-        session5.commit();
+            final var session5 = sessionFactory.newSession(agId);
+            session5.commit();
 
-        assertVersions(session5.listVersions(agId), "v2", "v3");
-        assertVersions(session5.listVersions(containerId), "v2", "v3");
-        assertVersions(session5.listVersions(binaryId), "v2", "v3");
-        assertVersions(session5.listVersions(binary2Id), "v2");
+            assertVersions(session5.listVersions(agId), "v2", "v3");
+            assertVersions(session5.listVersions(containerId), "v2", "v3");
+            assertVersions(session5.listVersions(binaryId), "v2", "v3");
+            assertVersions(session5.listVersions(binary2Id), "v2");
+        }
     }
 
     @Test
