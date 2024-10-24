@@ -30,6 +30,8 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -43,9 +45,8 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
@@ -55,7 +56,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -64,7 +65,9 @@ import static org.junit.Assert.fail;
  */
 @RunWith(Parameterized.class)
 public class DefaultOcflObjectSessionTest {
-
+    public static final Instant ORIGINAL_TIMESTAMP = Instant.parse("2024-10-10T10:10:05.447609300Z");
+    public static final Instant UPDATED_TIMESTAMP = Instant.parse("2024-10-10T10:10:22.053500010Z");
+    public static final Instant UPDATED_TIMESTAMP2 = Instant.parse("2024-10-10T10:10:24.853500010Z");
     @Rule
     public TemporaryFolder temp = TemporaryFolder.builder().assureDeletion().build();
 
@@ -856,25 +859,36 @@ public class DefaultOcflObjectSessionTest {
     public void listAgVersions() {
         final var binary2Id = DEFAULT_AG_ID + "/baz";
 
-        final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
 
-        write(session1, ResourceUtils.ag(DEFAULT_AG_ID, ROOT, "ag"));
-        write(session1, ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "binary"));
-        session1.commit();
+            final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
+            write(session1, ResourceUtils.ag(DEFAULT_AG_ID, ROOT, "ag"));
+            write(session1, ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "binary"));
+            session1.commit();
+        }
 
-        write(session2, ResourceUtils.partBinary(binary2Id, DEFAULT_AG_ID, DEFAULT_AG_ID, "binary2"));
-        session2.commit();
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
+            final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
 
-        final var session3 = sessionFactory.newSession(DEFAULT_AG_ID);
+            write(session2, ResourceUtils.partBinary(binary2Id, DEFAULT_AG_ID, DEFAULT_AG_ID, "binary2"));
+            session2.commit();
+        }
 
-        write(session3, ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "updated"));
-        session3.commit();
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP2);
 
-        assertVersions(session3.listVersions(DEFAULT_AG_ID), "v1", "v2", "v3");
-        assertVersions(session3.listVersions(DEFAULT_AG_BINARY_ID), "v1", "v3");
-        assertVersions(session3.listVersions(binary2Id), "v2");
+            final var session3 = sessionFactory.newSession(DEFAULT_AG_ID);
+
+            write(session3, ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "updated"));
+            session3.commit();
+
+            assertVersions(session3.listVersions(DEFAULT_AG_ID), "v1", "v2", "v3");
+            assertVersions(session3.listVersions(DEFAULT_AG_BINARY_ID), "v1", "v3");
+            assertVersions(session3.listVersions(binary2Id), "v2");
+        }
     }
 
     @Test(expected = NotFoundException.class)
@@ -1269,36 +1283,53 @@ public class DefaultOcflObjectSessionTest {
 
     @Test
     public void touchAgWhenAgPartUpdated() {
-        close(defaultAg());
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
+            close(defaultAg());
 
-        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-        assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
+            final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+            assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
+        }
 
-        close(defaultAgBinary());
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
+            close(defaultAgBinary());
 
-        assertVersions(session.listVersions(DEFAULT_AG_ID), "v1", "v2");
-        assertVersions(session.listVersions(DEFAULT_AG_BINARY_ID), "v2");
+            final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+            assertVersions(session.listVersions(DEFAULT_AG_ID), "v1", "v2");
+            assertVersions(session.listVersions(DEFAULT_AG_BINARY_ID), "v2");
+        }
     }
 
     @Test
     public void touchingShouldUseTheTimestampFromTheLastUpdatedResource() throws InterruptedException {
-        close(defaultAg());
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
 
-        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-        assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
+            close(defaultAg());
 
-        final var binary = ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "bar");
-        final var timestamp = binary.getHeaders().getLastModifiedDate();
+            final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+            assertVersions(session.listVersions(DEFAULT_AG_ID), "v1");
 
-        TimeUnit.SECONDS.sleep(1);
+            final var agHeaders = session.readHeaders(DEFAULT_AG_ID);
+            assertEquals(ORIGINAL_TIMESTAMP, agHeaders.getMementoCreatedDate());
+        }
 
-        final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
-        write(session2, binary);
-        session2.commit();
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
 
-        final var agHeaders = session2.readHeaders(DEFAULT_AG_ID);
-        assertEquals(timestamp, agHeaders.getMementoCreatedDate());
-        assertNotEquals(timestamp, agHeaders.getLastModifiedDate());
+            final var binary = ResourceUtils.partBinary(DEFAULT_AG_BINARY_ID, DEFAULT_AG_ID, DEFAULT_AG_ID, "bar");
+
+            final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
+            write(session2, binary);
+            session2.commit();
+
+            final var agHeaders = session2.readHeaders(DEFAULT_AG_ID);
+            // AG memento should be updated to the time the binary was updated
+            assertEquals(UPDATED_TIMESTAMP, agHeaders.getMementoCreatedDate());
+            // AG last modified should be unchanged from when the AG was created, not when the binary was updated
+            assertEquals(ORIGINAL_TIMESTAMP, agHeaders.getLastModifiedDate());
+        }
     }
 
     @Test
@@ -1321,83 +1352,110 @@ public class DefaultOcflObjectSessionTest {
     @Test
     public void touchBinaryWhenDescUpdated() {
         final var resourceId = "info:fedora/foo";
-        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "foo");
-
         final var descId = "info:fedora/foo/fcr:metadata";
-        final var descContent = ResourceUtils.atomicDesc(descId, resourceId, "desc");
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
 
-        final var session = sessionFactory.newSession(resourceId);
+            final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "foo");
+            final var descContent = ResourceUtils.atomicDesc(descId, resourceId, "desc");
 
-        write(session, content);
-        write(session, descContent);
-        session.commit();
+            final var session = sessionFactory.newSession(resourceId);
 
-        assertVersions(session.listVersions(resourceId), "v1");
-        assertVersions(session.listVersions(descId), "v1");
+            write(session, content);
+            write(session, descContent);
+            session.commit();
+        }
 
-        final var session2 = sessionFactory.newSession(resourceId);
-        final var descContent2 = ResourceUtils.atomicDesc(descId, resourceId, "desc2");
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
 
-        write(session2, descContent2);
-        session2.commit();
+            final var session = sessionFactory.newSession(resourceId);
 
-        assertVersions(session.listVersions(resourceId), "v1", "v2");
-        assertVersions(session.listVersions(descId), "v1", "v2");
+            assertVersions(session.listVersions(resourceId), "v1");
+            assertVersions(session.listVersions(descId), "v1");
+
+            final var session2 = sessionFactory.newSession(resourceId);
+            final var descContent2 = ResourceUtils.atomicDesc(descId, resourceId, "desc2");
+
+            write(session2, descContent2);
+            session2.commit();
+
+            assertVersions(session.listVersions(resourceId), "v1", "v2");
+            assertVersions(session.listVersions(descId), "v1", "v2");
+        }
     }
 
     @Test
     public void touchBinaryDescWhenBinaryUpdated() {
         final var resourceId = "info:fedora/foo";
-        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "foo");
-
         final var descId = "info:fedora/foo/fcr:metadata";
-        final var descContent = ResourceUtils.atomicDesc(descId, resourceId, "desc");
 
-        final var session = sessionFactory.newSession(resourceId);
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
 
-        write(session, content);
-        write(session, descContent);
-        session.commit();
+            final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "foo");
+            final var descContent = ResourceUtils.atomicDesc(descId, resourceId, "desc");
 
-        assertVersions(session.listVersions(resourceId), "v1");
-        assertVersions(session.listVersions(descId), "v1");
+            final var session = sessionFactory.newSession(resourceId);
 
-        final var session2 = sessionFactory.newSession(resourceId);
-        final var content2 = ResourceUtils.atomicBinary(resourceId, ROOT, "bar");
+            write(session, content);
+            write(session, descContent);
+            session.commit();
+        }
 
-        write(session2, content2);
-        session2.commit();
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
 
-        assertVersions(session.listVersions(resourceId), "v1", "v2");
-        assertVersions(session.listVersions(descId), "v1", "v2");
+            final var session = sessionFactory.newSession(resourceId);
+
+            assertVersions(session.listVersions(resourceId), "v1");
+            assertVersions(session.listVersions(descId), "v1");
+
+            final var session2 = sessionFactory.newSession(resourceId);
+            final var content2 = ResourceUtils.atomicBinary(resourceId, ROOT, "bar");
+
+            write(session2, content2);
+            session2.commit();
+
+            assertVersions(session.listVersions(resourceId), "v1", "v2");
+            assertVersions(session.listVersions(descId), "v1", "v2");
+        }
     }
 
     @Test
     public void touchBinaryWhenBinaryDescMementoCreated() {
         final var resourceId = "info:fedora/foo";
-        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "foo");
-
         final var descId = "info:fedora/foo/fcr:metadata";
-        final var descContent = ResourceUtils.atomicDesc(descId, resourceId, "desc");
 
-        final var session = sessionFactory.newSession(resourceId);
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
 
-        write(session, content);
-        write(session, descContent);
-        session.commit();
+            final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "foo");
+            final var descContent = ResourceUtils.atomicDesc(descId, resourceId, "desc");
 
-        assertVersions(session.listVersions(resourceId), "v1");
-        assertVersions(session.listVersions(descId), "v1");
+            final var session = sessionFactory.newSession(resourceId);
 
-        final var session2 = sessionFactory.newSession(resourceId);
+            write(session, content);
+            write(session, descContent);
+            session.commit();
 
-        session2.writeHeaders(ResourceHeaders.builder(session.readHeaders(descId))
-                .withMementoCreatedDate(Instant.now())
-                .build());
-        session2.commit();
+            assertVersions(session.listVersions(resourceId), "v1");
+            assertVersions(session.listVersions(descId), "v1");
+        }
 
-        assertVersions(session.listVersions(resourceId), "v1", "v2");
-        assertVersions(session.listVersions(descId), "v1", "v2");
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
+
+            final var session2 = sessionFactory.newSession(resourceId);
+
+            session2.writeHeaders(ResourceHeaders.builder(session2.readHeaders(descId))
+                    .withMementoCreatedDate(Instant.now())
+                    .build());
+            session2.commit();
+
+            assertVersions(session2.listVersions(resourceId), "v1", "v2");
+            assertVersions(session2.listVersions(descId), "v1", "v2");
+        }
     }
 
     @Test
@@ -1442,110 +1500,134 @@ public class DefaultOcflObjectSessionTest {
         final var binary2Id = "info:fedora/foo/bar/boz";
 
         // Create initial resources -- mutable head
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
 
-        final var session = sessionFactory.newSession(agId);
-        session.commitType(CommitType.UNVERSIONED);
+            final var session = sessionFactory.newSession(agId);
+            session.commitType(CommitType.UNVERSIONED);
 
-        final var agContent = ResourceUtils.ag(agId, ROOT, "foo");
-        final var containerContent = ResourceUtils.partContainer(containerId, agId, agId, "bar");
-        final var binaryContent = ResourceUtils.partBinary(binaryId, containerId, agId, "baz");
-        final var binary2Content = ResourceUtils.partBinary(binary2Id, containerId, agId, "boz");
+            final var agContent = ResourceUtils.ag(agId, ROOT, "foo");
+            final var containerContent = ResourceUtils.partContainer(containerId, agId, agId, "bar");
+            final var binaryContent = ResourceUtils.partBinary(binaryId, containerId, agId, "baz");
+            final var binary2Content = ResourceUtils.partBinary(binary2Id, containerId, agId, "boz");
 
-        write(session, agContent);
-        write(session, containerContent);
-        write(session, binaryContent);
-        write(session, binary2Content);
+            write(session, agContent);
+            write(session, containerContent);
+            write(session, binaryContent);
+            write(session, binary2Content);
 
-        session.commit();
+            session.commit();
 
-        assertEquals(0, session.listVersions(agId).size());
-        assertEquals(0, session.listVersions(containerId).size());
-        assertEquals(0, session.listVersions(binaryId).size());
-        assertEquals(0, session.listVersions(binary2Id).size());
+            assertEquals(0, session.listVersions(agId).size());
+            assertEquals(0, session.listVersions(containerId).size());
+            assertEquals(0, session.listVersions(binaryId).size());
+            assertEquals(0, session.listVersions(binary2Id).size());
+        }
 
         // Commit mutable head
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
 
-        final var session2 = sessionFactory.newSession(agId);
-        session2.commit();
+            final var session2 = sessionFactory.newSession(agId);
+            session2.commit();
 
-        assertVersions(session2.listVersions(agId), "v2");
-        assertVersions(session2.listVersions(containerId), "v2");
-        assertVersions(session2.listVersions(binaryId), "v2");
-        assertVersions(session2.listVersions(binary2Id), "v2");
+            assertVersions(session2.listVersions(agId), "v2");
+            assertVersions(session2.listVersions(containerId), "v2");
+            assertVersions(session2.listVersions(binaryId), "v2");
+            assertVersions(session2.listVersions(binary2Id), "v2");
+        }
 
         // Update a subset of resources -- mutable head
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP2);
 
-        final var session3 = sessionFactory.newSession(agId);
-        session3.commitType(CommitType.UNVERSIONED);
+            final var session3 = sessionFactory.newSession(agId);
+            session3.commitType(CommitType.UNVERSIONED);
 
-        final var containerContentV2 = ResourceUtils.partContainer(containerId, agId, agId, "bar - 2");
-        final var binaryContentV2 = ResourceUtils.partBinary(binaryId, containerId, agId, "baz - 2");
+            final var containerContentV2 = ResourceUtils.partContainer(containerId, agId, agId, "bar - 2");
+            final var binaryContentV2 = ResourceUtils.partBinary(binaryId, containerId, agId, "baz - 2");
 
-        write(session3, containerContentV2);
-        write(session3, binaryContentV2);
+            write(session3, containerContentV2);
+            write(session3, binaryContentV2);
 
-        session3.commit();
+            session3.commit();
 
-        assertVersions(session3.listVersions(agId), "v2");
-        assertVersions(session3.listVersions(containerId), "v2");
-        assertVersions(session3.listVersions(binaryId), "v2");
-        assertVersions(session3.listVersions(binary2Id), "v2");
+            assertVersions(session3.listVersions(agId), "v2");
+            assertVersions(session3.listVersions(containerId), "v2");
+            assertVersions(session3.listVersions(binaryId), "v2");
+            assertVersions(session3.listVersions(binary2Id), "v2");
+        }
 
         // Update a subset of resources again -- mutable head
+        final var timestamp3 = Instant.parse("2024-10-10T10:10:25.853500010Z");
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(timestamp3);
 
-        final var session4 = sessionFactory.newSession(agId);
-        session4.commitType(CommitType.UNVERSIONED);
+            final var session4 = sessionFactory.newSession(agId);
+            session4.commitType(CommitType.UNVERSIONED);
 
-        final var containerContentV3 = ResourceUtils.partContainer(containerId, agId, agId, "bar - 3");
+            final var containerContentV3 = ResourceUtils.partContainer(containerId, agId, agId, "bar - 3");
 
-        write(session4, containerContentV3);
+            write(session4, containerContentV3);
 
-        session4.commit();
+            session4.commit();
 
-        assertVersions(session4.listVersions(agId), "v2");
-        assertVersions(session4.listVersions(containerId), "v2");
-        assertVersions(session4.listVersions(binaryId), "v2");
-        assertVersions(session4.listVersions(binary2Id), "v2");
+            assertVersions(session4.listVersions(agId), "v2");
+            assertVersions(session4.listVersions(containerId), "v2");
+            assertVersions(session4.listVersions(binaryId), "v2");
+            assertVersions(session4.listVersions(binary2Id), "v2");
+        }
 
         // Commit mutable head
+        final var timestamp4 = Instant.parse("2024-10-10T10:10:26.853500010Z");
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(timestamp4);
 
-        final var session5 = sessionFactory.newSession(agId);
-        session5.commit();
+            final var session5 = sessionFactory.newSession(agId);
+            session5.commit();
 
-        assertVersions(session5.listVersions(agId), "v2", "v3");
-        assertVersions(session5.listVersions(containerId), "v2", "v3");
-        assertVersions(session5.listVersions(binaryId), "v2", "v3");
-        assertVersions(session5.listVersions(binary2Id), "v2");
+            assertVersions(session5.listVersions(agId), "v2", "v3");
+            assertVersions(session5.listVersions(containerId), "v2", "v3");
+            assertVersions(session5.listVersions(binaryId), "v2", "v3");
+            assertVersions(session5.listVersions(binary2Id), "v2");
+        }
     }
 
     @Test
     public void testDeleteChildInAgUpdatesAg() throws Exception {
-        // Create AG and child resource
-        final var ag = defaultAg();
-        final var binaryChild = defaultAgBinary();
-        close(ag);
-        close(binaryChild);
-        // Time passes
-        Thread.sleep(1000);
 
-        final var session = sessionFactory.newSession(DEFAULT_AG_ID);
-        final var now = Instant.now();
-        // Mark the child as deleted
-        final var deleteHeaders = ResourceHeaders.builder(binaryChild.getHeaders())
-                .withContentPath(null)
-                .withContentSize(-1)
-                .withDigests(null)
-                .withDeleted(true)
-                .withLastModifiedDate(now)
-                .withMementoCreatedDate(now)
-                .withStateToken(ResourceUtils.getStateToken(now))
-                .build();
-        session.deleteContentFile(deleteHeaders);
+        final ResourceContent ag;
+        final ResourceContent binaryChild;
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(ORIGINAL_TIMESTAMP);
+            // Create AG and child resource
+            ag = defaultAg();
+            binaryChild = defaultAgBinary();
+            close(ag);
+            close(binaryChild);
+        }
 
-        // The AG should have an updated timestamp to indicate it was altered
-        final var correctAg = touch(ag, deleteHeaders);
-        final var resources = listHeaders(session);
-        assertHeaders(resources, correctAg.getHeaders(), deleteHeaders);
+        try (MockedStatic<Instant> mockInstant = Mockito.mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
+            mockInstant.when(Instant::now).thenReturn(UPDATED_TIMESTAMP);
+            final var session = sessionFactory.newSession(DEFAULT_AG_ID);
+            final var now = Instant.now();
+            // Mark the child as deleted
+            final var deleteHeaders = ResourceHeaders.builder(binaryChild.getHeaders())
+                    .withContentPath(null)
+                    .withContentSize(-1)
+                    .withDigests(null)
+                    .withDeleted(true)
+                    .withLastModifiedDate(now)
+                    .withMementoCreatedDate(now)
+                    .withStateToken(ResourceUtils.getStateToken(now))
+                    .build();
+            session.deleteContentFile(deleteHeaders);
+
+            // The AG should have an updated timestamp to indicate it was altered
+            final var correctAg = touch(ag, deleteHeaders);
+            final var resources = listHeaders(session);
+            assertHeaders(resources, correctAg.getHeaders(), deleteHeaders);
+        }
     }
 
     @Test(expected = ValidationException.class)
@@ -1559,6 +1641,116 @@ public class DefaultOcflObjectSessionTest {
 
         write(session, content);
         session.commit();
+    }
+
+    @Test
+    public void readRangeValidPartial() {
+        readRangeReturnsExpectedContent("Test time in fcrepo storage",
+                "time in fcrepo",
+                5, 18);
+    }
+
+    @Test
+    public void readRangeValidWhole() {
+        readRangeReturnsExpectedContent("Test time in fcrepo storage",
+                "Test time in fcrepo storage",
+                0, 27);
+    }
+
+    @Test
+    public void readRangeEndGreaterThanSize() {
+        readRangeReturnsExpectedContent("Test time in fcrepo storage",
+                "time in fcrepo storage",
+                5, 999);
+    }
+
+    @Test
+    public void readRangeStartGreaterThanSize() {
+        readRangeReturnsExpectedContent("Test time in fcrepo storage",
+                "",
+                998, 999);
+    }
+
+    @Test
+    public void readRangeNegativeStart() {
+        readRangeReturnsExpectedContent("Test time in fcrepo storage",
+                "Test time in fcrepo storage",
+                -3, 100);
+    }
+
+    @Test
+    public void readRangeNegativeEnd() {
+        readRangeReturnsExpectedContent("Test time in fcrepo storage",
+                "",
+                0, -1);
+    }
+
+    public void readRangeReturnsExpectedContent(final String originalStr, final String expectedStr,
+                                                final int start, final int end) {
+        final var resourceId = "info:fedora/foo/bar";
+        final var session = sessionFactory.newSession(resourceId);
+        final var content = ResourceUtils.atomicBinary(resourceId, "info:fedora/foo", originalStr);
+
+        write(session, content);
+
+        final var stagedContent = session.readRange(resourceId, start, end);
+        assertResourceContent(expectedStr, content, stagedContent);
+
+        session.commit();
+
+        final var committedContent = session.readRange(resourceId, start, end);
+        assertResourceContent(expectedStr, content, committedContent);
+    }
+
+    @Test
+    public void readRangePreviousVersion() {
+        final var resourceId = "info:fedora/foo";
+
+        final var first = ResourceUtils.atomicBinary(resourceId, ROOT, "first");
+        final var second = ResourceUtils.atomicBinary(resourceId, ROOT, "second");
+        final var third = ResourceUtils.atomicBinary(resourceId, ROOT, "third");
+
+        final var session1 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session1, first);
+        session1.commit();
+
+        final var session2 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session2, second);
+        session2.commit();
+
+        final var session3 = sessionFactory.newSession(DEFAULT_AG_ID);
+        write(session3, third);
+        session3.commit();
+
+        assertResourceContent("rst", first, session3.readRange(resourceId, "v1", 2, 4));
+        assertResourceContent("con", second, session3.readRange(resourceId, "v2", 2, 4));
+        assertResourceContent("ird", third, session3.readRange(resourceId, "v3", 2, 4));
+
+        try {
+            session3.readRange(resourceId, "v4", 2, 4);
+            fail("Expected an exception because the version should not exist");
+        } catch (NotFoundException e) {
+            // expected exception
+        }
+    }
+
+    @Test
+    public void readRangeDeletedFile() {
+        final var resourceId = "info:fedora/foo";
+
+        final var content = ResourceUtils.atomicBinary(resourceId, ROOT, "first");
+        final var session = sessionFactory.newSession(resourceId);
+
+        write(session, content);
+        session.commit();
+
+        final var session2 = sessionFactory.newSession(resourceId);
+
+        session2.deleteContentFile(ResourceHeaders.builder(content.getHeaders())
+                .withDeleted(true)
+                .build());
+
+        assertThrows(NotFoundException.class, () -> session2.readRange(resourceId, "v1", 2, 4));
     }
 
     private void assertResourceContent(final String content,
