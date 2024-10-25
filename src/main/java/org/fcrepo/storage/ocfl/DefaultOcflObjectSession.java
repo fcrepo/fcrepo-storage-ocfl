@@ -22,6 +22,7 @@ import io.ocfl.api.model.VersionInfo;
 import io.ocfl.api.model.VersionNum;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.input.BoundedInputStream;
 import org.apache.commons.lang3.SystemUtils;
 import org.fcrepo.storage.ocfl.cache.Cache;
 import org.fcrepo.storage.ocfl.exception.InvalidContentException;
@@ -368,6 +369,25 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     }
 
     @Override
+    public ResourceContent readRange(final String resourceId, final long startPosition, final long endPosition) {
+        return readRange(resourceId, null, startPosition, endPosition);
+    }
+
+    @Override
+    public ResourceContent readRange(final String resourceId, final String versionNumber,
+                                     final long startPosition, final long endPosition) {
+        ensureKnownRootResource();
+
+        final var headers = readHeaders(resourceId, versionNumber);
+        Optional<InputStream> contentStream = Optional.empty();
+        if (headers.getContentPath() != null) {
+            contentStream = Optional.of(readRangeStream(encode(headers.getContentPath()), resourceId, versionNumber,
+                    startPosition, endPosition));
+        }
+        return new ResourceContent(contentStream, headers);
+    }
+
+    @Override
     public List<OcflVersionInfo> listVersions(final String resourceId) {
         final var headerPath = PersistencePaths.headerPath(rootResourceId(), resourceId);
 
@@ -608,6 +628,50 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
     private Optional<InputStream> readFromOcflOptional(final PathPair path, final String versionNumber) {
         final var objectFile = getObjectVersionFile(path, versionNumber);
         return objectFile.map(OcflObjectVersionFile::getStream);
+    }
+
+    private InputStream readRangeStream(final PathPair path, final String resourceId, final String versionNumber,
+                                        final long startPosition, final long endPosition) {
+        return readRangeStreamOptional(path, versionNumber, startPosition, endPosition)
+                .orElseThrow(() -> notFoundException(path, resourceId));
+    }
+
+    private Optional<InputStream> readRangeStreamOptional(final PathPair path, final String versionNumber,
+                                                          final long startPosition, final long endPosition) {
+        if (isOpen() && deletePaths.contains(path)) {
+            return Optional.empty();
+        }
+
+        if (versionNumber != null) {
+            return readRangeFromOcflOptional(path, versionNumber, startPosition, endPosition);
+        }
+
+        return readRangeFromStaging(path, startPosition, endPosition)
+                .or(() -> readRangeFromOcflOptional(path, null, startPosition, endPosition));
+    }
+
+    private Optional<InputStream> readRangeFromStaging(final PathPair path,
+                                                       final long startPosition, final long endPosition) {
+        final var stagingPath = stagingPath(path);
+
+        if (Files.exists(stagingPath)) {
+            try {
+                final long length = endPosition + 1;
+                final var stream = new BoundedInputStream(Files.newInputStream(stagingPath), length);
+                stream.skip(startPosition);
+                return Optional.of(stream);
+            } catch (final IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    private Optional<InputStream> readRangeFromOcflOptional(final PathPair path, final String versionNumber,
+                                                            final long startPosition, final long endPosition) {
+        final var objectFile = getObjectVersionFile(path, versionNumber);
+        return objectFile.map(o -> o.getRange(startPosition, endPosition));
     }
 
     private Path stagingPath(final PathPair path) {
