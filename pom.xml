@@ -13,7 +13,7 @@
   <properties>
     <compiler.plugin.version>3.8.0</compiler.plugin.version>
     <fcrepo-build-tools.version>6.0.0</fcrepo-build-tools.version>
-    <gpg.plugin.version>1.6</gpg.plugin.version> <jackson.version>2.13.0</jackson.version>
+    <gpg.plugin.version>1.6</gpg.plugin.version> <jackson.version>2.13.4.2</jackson.version>
     <license.plugin.version>3.0</license.plugin.version>
     <project.java.source>11</project.java.source>
     <project_name>${project.artifactId}</project_name>
