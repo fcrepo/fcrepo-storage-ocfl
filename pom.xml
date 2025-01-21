@@ -15,7 +15,7 @@
     <fcrepo-build-tools.version>6.0.0</fcrepo-build-tools.version>
     <gpg.plugin.version>1.6</gpg.plugin.version> <jackson.version>2.13.0</jackson.version>
     <license.plugin.version>3.0</license.plugin.version>
-    <project.java.source>11</project.java.source>
+    <project.java.source>21</project.java.source>
     <project_name>${project.artifactId}</project_name>
     <release.plugin.version>2.5.2</release.plugin.version>
     <scm-provider-gitexe.plugin.version>1.9.4</scm-provider-gitexe.plugin.version>
