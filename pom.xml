@@ -11,17 +11,18 @@
   <url>http://fedorarepository.org</url>
 
   <properties>
-    <compiler.plugin.version>3.8.0</compiler.plugin.version>
+    <compiler.plugin.version>3.13.0</compiler.plugin.version>
     <fcrepo-build-tools.version>6.0.0</fcrepo-build-tools.version>
-    <gpg.plugin.version>1.6</gpg.plugin.version> <jackson.version>2.13.0</jackson.version>
-    <license.plugin.version>3.0</license.plugin.version>
+    <gpg.plugin.version>3.2.7</gpg.plugin.version>
+    <jackson.version>2.18.2</jackson.version>
+    <license.plugin.version>4.6</license.plugin.version>
     <project.java.source>21</project.java.source>
     <project_name>${project.artifactId}</project_name>
-    <release.plugin.version>2.5.2</release.plugin.version>
-    <scm-provider-gitexe.plugin.version>1.9.4</scm-provider-gitexe.plugin.version>
-    <checkstyle.plugin.version>3.1.1</checkstyle.plugin.version>
-    <source.plugin.version>3.0.1</source.plugin.version>
-    <javadoc.plugin.version>3.2.0</javadoc.plugin.version>
+    <release.plugin.version>3.1.1</release.plugin.version>
+    <scm-provider-gitexe.plugin.version>2.1.0</scm-provider-gitexe.plugin.version>
+    <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
+    <source.plugin.version>3.3.1</source.plugin.version>
+    <javadoc.plugin.version>3.11.2</javadoc.plugin.version>
     <ocfl-java.version>2.2.1</ocfl-java.version>
     <sonatype.host>s01.oss.sonatype.org</sonatype.host>
   </properties>
@@ -148,6 +149,26 @@
             </execution>
           </executions>
         </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <executions>
+            <execution>
+              <goals>
+                <goal>properties</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>3.5.2</version>
+          <configuration>
+            <forkCount>0</forkCount>
+            <argLine>@{argLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
+          </configuration>
+        </plugin>
     </plugins>
   </build>
 
@@ -185,7 +206,7 @@
       <version>${jackson.version}</version>
     </dependency>
 
-    <dependency> 
+    <dependency>
       <groupId>commons-io</groupId>
       <artifactId>commons-io</artifactId>
       <version>2.14.0</version>
