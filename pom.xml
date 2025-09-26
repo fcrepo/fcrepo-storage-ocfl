@@ -21,6 +21,7 @@
     <release.plugin.version>3.1.1</release.plugin.version>
     <scm-provider-gitexe.plugin.version>2.1.0</scm-provider-gitexe.plugin.version>
     <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
+    <puppycrawl.checkstyle.version>11.0.0</puppycrawl.checkstyle.version>
     <source.plugin.version>3.3.1</source.plugin.version>
     <javadoc.plugin.version>3.11.2</javadoc.plugin.version>
     <ocfl-java.version>2.2.1</ocfl-java.version>
@@ -50,7 +51,7 @@
           <dependency>
             <groupId>com.puppycrawl.tools</groupId>
             <artifactId>checkstyle</artifactId>
-            <version>8.34</version>
+            <version>${puppycrawl.checkstyle.version}</version>
           </dependency>
         </dependencies>
         <configuration>
