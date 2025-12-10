@@ -170,6 +170,21 @@
             <argLine>@{argLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
           </configuration>
         </plugin>
+        <plugin>
+        <groupId>org.sonatype.central</groupId>
+        <artifactId>central-publishing-maven-plugin</artifactId>
+        <version>0.9.0</version>
+        <extensions>true</extensions>
+        <configuration>
+          <publishingServerId>central</publishingServerId>
+          <!-- Optional:
+          <autoPublish>false</autoPublish>
+          <waitUntil>validated</waitUntil>
+          -->
+        </configuration>
+      </plugin>
+
+
     </plugins>
   </build>
 
@@ -260,15 +275,15 @@
       <id>gh-pages</id>
       <name>Deployment through GitHub's site deployment plugin</name>
       <url>site/${project.version}</url>
-    </site>
+      </site>
     <snapshotRepository>
       <id>sonatype-nexus-snapshots</id>
       <name>Sonatype Nexus Shapshots</name>
-      <url>https://${sonatype.host}/content/repositories/snapshots/</url>
+      <url>https://central.sonatype.com/repository/maven-snapshots/</url>
     </snapshotRepository>
     <repository>
       <id>sonatype-nexus-staging</id>
-      <url>https://${sonatype.host}/service/local/staging/deploy/maven2/</url>
+      <url>https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/</url>
     </repository>
   </distributionManagement>
 
