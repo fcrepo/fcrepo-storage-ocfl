@@ -21,14 +21,14 @@ jobs:
     - name: Git support longpaths
       run: git config --global core.longpaths true
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Set up JDK 21
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v6
       with:
         distribution: 'temurin'
         java-version: 21
     - name: Cache Maven packages
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/.m2
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
@@ -44,9 +44,9 @@ jobs:
       - name: Git support longpaths
         run: git config --global core.longpaths true
       - name: Checkout fcrepo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set up JDK 21
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: 21
