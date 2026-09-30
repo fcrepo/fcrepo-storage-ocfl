@@ -657,7 +657,10 @@ public class DefaultOcflObjectSession implements OcflObjectSession {
         if (Files.exists(stagingPath)) {
             try {
                 final long length = endPosition + 1;
-                final var stream = new BoundedInputStream(Files.newInputStream(stagingPath), length);
+                final var stream = BoundedInputStream.builder()
+                        .setInputStream(Files.newInputStream(stagingPath))
+                        .setMaxCount(length)
+                        .get();
                 stream.skip(startPosition);
                 return Optional.of(stream);
             } catch (final IOException e) {
