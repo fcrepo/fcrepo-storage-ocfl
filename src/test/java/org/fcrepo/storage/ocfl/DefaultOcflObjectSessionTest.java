@@ -236,6 +236,25 @@ public class DefaultOcflObjectSessionTest {
     }
 
     @Test
+    public void writeNewHeaderOnlyRdfResource() {
+        final var resourceId = "info:fedora/foo/bar";
+        final var session = sessionFactory.newSession(resourceId);
+        final var content = ResourceUtils.atomicContainer(resourceId, "info:fedora/foo", null);
+
+        session.writeResource(content.getHeaders(), null);
+
+        final var stagedContent = session.readContent(resourceId);
+        assertEquals(content.getHeaders(), stagedContent.getHeaders());
+        assertFalse(stagedContent.getContentStream().isPresent());
+
+        session.commit();
+
+        final var committedContent = session.readContent(resourceId);
+        assertEquals(content.getHeaders(), committedContent.getHeaders());
+        assertFalse(committedContent.getContentStream().isPresent());
+    }
+
+    @Test
     public void writeNewAg() {
         final var agId = "info:fedora/foo";
         final var containerId = "info:fedora/foo/bar";

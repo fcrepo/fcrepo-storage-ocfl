@@ -142,6 +142,32 @@ public class ObjectValidatorTest {
     }
 
     @Test
+    public void validHeaderOnlyAtomicRdfResource() {
+        writeAndCommit(defaultId,
+                ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, null));
+
+        objectValidator.validate(defaultId, true);
+    }
+
+    @Test
+    public void validHeaderOnlyAtomicNonRdfDescription() {
+        writeAndCommit(defaultId,
+                ResourceUtils.atomicBinary(defaultId, ROOT_RESOURCE, "blah"),
+                ResourceUtils.atomicDesc(defaultDescId, defaultId, null));
+
+        objectValidator.validate(defaultId, true);
+    }
+
+    @Test
+    public void validHeaderOnlyAtomicAcl() {
+        writeAndCommit(defaultId,
+                ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, "blah"),
+                ResourceUtils.atomicContainerAcl(defaultAclId, defaultId, null));
+
+        objectValidator.validate(defaultId, true);
+    }
+
+    @Test
     public void validAtomicDirectContainer() {
         writeAndCommit(defaultId,
                 ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, "blah", headers -> {
@@ -951,6 +977,19 @@ public class ObjectValidatorTest {
 
         validationFailureStrict(defaultId, true,
                 containsString("[Version v2] Unexpected file: secrets.txt"));
+    }
+
+    @Test
+    public void failWhenHeaderOnlyRdfHasOrphanedContentFile() throws IOException {
+        writeAndCommit(defaultId,
+                ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, null));
+
+        ocflRepo.updateObject(ObjectVersionId.head(defaultId), null, updater -> {
+            updater.writeFile(IOUtils.toInputStream("orphan", StandardCharsets.UTF_8), "fcr-container.nt");
+        });
+
+        validationFailureStrict(defaultId, true,
+                containsString("[Version v2] Unexpected file: fcr-container.nt"));
     }
 
     @Test

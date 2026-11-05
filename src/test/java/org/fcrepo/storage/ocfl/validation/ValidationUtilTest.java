@@ -295,6 +295,12 @@ public class ValidationUtilTest {
     }
 
     @Test
+    public void failRequireEmptyWhenNotEmpty() {
+        ValidationUtil.requireEmpty(context, "asdf", List.of("asdf"));
+        failsWith(containsString("Must define property 'asdf' with no entries but was '[asdf]'"));
+    }
+
+    @Test
     public void isModelTrueWhenMatches() {
         Arrays.stream(InteractionModel.values()).forEach(model -> {
             assertTrue(model.getUri(), ValidationUtil.isModel(model, model.getUri()));
@@ -307,24 +313,35 @@ public class ValidationUtilTest {
     }
 
     @Test
-    public void contentNotExpectedWhenDeleted() {
-        assertFalse(ValidationUtil.contentExpected(ResourceHeaders.builder()
+    public void contentNotRequiredWhenDeleted() {
+        assertFalse(ValidationUtil.contentRequired(ResourceHeaders.builder()
                 .withDeleted(true)
+                .withInteractionModel(InteractionModel.NON_RDF.getUri())
                 .build()));
     }
 
     @Test
-    public void contentNotExpectedWhenNotDeletedButExternal() {
-        assertFalse(ValidationUtil.contentExpected(ResourceHeaders.builder()
+    public void contentNotRequiredWhenNotDeletedButExternal() {
+        assertFalse(ValidationUtil.contentRequired(ResourceHeaders.builder()
                 .withDeleted(false)
                 .withExternalHandling("proxy")
+                .withInteractionModel(InteractionModel.NON_RDF.getUri())
                 .build()));
     }
 
     @Test
-    public void contentExpectedWhenNotDeletedOrExternal() {
-        assertTrue(ValidationUtil.contentExpected(ResourceHeaders.builder()
+    public void contentRequiredForInternalBinary() {
+        assertTrue(ValidationUtil.contentRequired(ResourceHeaders.builder()
                 .withDeleted(false)
+                .withInteractionModel(InteractionModel.NON_RDF.getUri())
+                .build()));
+    }
+
+    @Test
+    public void contentNotRequiredForRdf() {
+        assertFalse(ValidationUtil.contentRequired(ResourceHeaders.builder()
+                .withDeleted(false)
+                .withInteractionModel(InteractionModel.BASIC_CONTAINER.getUri())
                 .build()));
     }
 

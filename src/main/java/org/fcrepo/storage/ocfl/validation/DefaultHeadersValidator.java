@@ -95,9 +95,12 @@ public class DefaultHeadersValidator implements HeadersValidator {
         ValidationUtil.requireNotNull(context, "createdDate", headers.getCreatedDate());
         ValidationUtil.requireNotNull(context, "lastModifiedDate", headers.getLastModifiedDate());
 
-        final var contentExpected = ValidationUtil.contentExpected(headers);
+        // Is content required, as is the case for internal binaries?
+        final var contentRequired = ValidationUtil.contentRequired(headers);
+        // Is content actually present, according to the headers?
+        final var contentPresent = ValidationUtil.contentPresent(headers);
 
-        if (paths != null && contentExpected) {
+        if (paths != null && (contentRequired || (contentPresent && !headers.isDeleted()))) {
             ValidationUtil.requireValue(context, "contentPath", paths.getContentFilePath(), headers.getContentPath());
         }
 
@@ -105,9 +108,13 @@ public class DefaultHeadersValidator implements HeadersValidator {
             ValidationUtil.requireValue(context, "deleted", rootHeaders.isDeleted(), headers.isDeleted());
         }
 
-        // All resources that are not external or deleted must have content files
-        if (contentExpected) {
+        if (contentRequired || (contentPresent && !headers.isDeleted())) {
             ValidationUtil.requireNotEmpty(context, "digests", headers.getDigests());
+        }
+
+        if (ValidationUtil.headerOnlyRdf(headers)) {
+            ValidationUtil.requireValue(context, "contentSize", -1L, headers.getContentSize());
+            ValidationUtil.requireEmpty(context, "digests", headers.getDigests());
         }
 
         ValidationUtil.validateDigests(context, headers.getDigests());

@@ -229,6 +229,19 @@ final class ValidationUtil {
     }
 
     /**
+     * Validates that a collection is null or empty.
+     *
+     * @param context the context to add validation errors to
+     * @param name the collection's property name
+     * @param collection the collection
+     */
+    public static void requireEmpty(final Context context, final String name, final Collection<?> collection) {
+        if (collection != null && !collection.isEmpty()) {
+            context.problem("Must define property '%s' with no entries but was '%s'", name, collection);
+        }
+    }
+
+    /**
      * Returns true if the interaction model is equal to the expected model
      *
      * @param expected the expected model
@@ -240,13 +253,37 @@ final class ValidationUtil {
     }
 
     /**
-     * Returns true when there should be a content file
+     * Returns true when the resource is an internal binary that must have content.
      *
      * @param headers the resource headers
-     * @return true if there should be a content file
+     * @return true if the resource requires a content file
      */
-    public static boolean contentExpected(final ResourceHeaders headers) {
-        return !headers.isDeleted() && headers.getExternalHandling() == null;
+    public static boolean contentRequired(final ResourceHeaders headers) {
+        return !headers.isDeleted()
+                && headers.getExternalHandling() == null
+                && isModel(InteractionModel.NON_RDF, headers.getInteractionModel());
+    }
+
+    /**
+     * Returns true when the resource headers declare a content file.
+     *
+     * @param headers the resource headers
+     * @return true if the resource declares a content file
+     */
+    public static boolean contentPresent(final ResourceHeaders headers) {
+        return headers.getContentPath() != null;
+    }
+
+    /**
+     * Returns true when the headers describe an RDF resource without content.
+     *
+     * @param headers the resource headers
+     * @return true if the resource is a non-deleted RDF resource without content
+     */
+    public static boolean headerOnlyRdf(final ResourceHeaders headers) {
+        return !headers.isDeleted()
+                && !isModel(InteractionModel.NON_RDF, headers.getInteractionModel())
+                && !contentPresent(headers);
     }
 
     /**

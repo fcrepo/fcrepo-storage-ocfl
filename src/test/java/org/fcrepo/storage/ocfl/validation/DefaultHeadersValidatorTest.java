@@ -69,6 +69,26 @@ public class DefaultHeadersValidatorTest {
     }
 
     @Test
+    public void validHeaderOnlyAtomicRdfResource() {
+        final var headers = ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, null).getHeaders();
+        validator.validate(PersistencePaths.rdfResource(defaultId, defaultId), headers, headers);
+    }
+
+    @Test
+    public void validHeaderOnlyAtomicNonRdfDescription() {
+        final var rootHeaders = ResourceUtils.atomicBinary(defaultId, ROOT_RESOURCE, "blah").getHeaders();
+        final var headers = ResourceUtils.atomicDesc(defaultDescId, defaultId, null).getHeaders();
+        validator.validate(PersistencePaths.rdfResource(defaultId, defaultDescId), headers, rootHeaders);
+    }
+
+    @Test
+    public void validHeaderOnlyAtomicAcl() {
+        final var rootHeaders = ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, "blah").getHeaders();
+        final var headers = ResourceUtils.atomicContainerAcl(defaultAclId, defaultId, null).getHeaders();
+        validator.validate(PersistencePaths.aclResource(true, defaultId, defaultAclId), headers, rootHeaders);
+    }
+
+    @Test
     public void validAtomicDirectContainer() {
         final var headers = ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, "blah", h -> {
             h.withInteractionModel(InteractionModel.DIRECT_CONTAINER.getUri());
@@ -240,11 +260,11 @@ public class DefaultHeadersValidatorTest {
 
     @Test
     public void failWhenMissingRequiredContent() {
-        final var headers = ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, "blah", h -> {
-            h.withContentPath(null);
-        }).getHeaders();
-        expectFailureRelaxed(PersistencePaths.rdfResource(defaultId, defaultId), headers, headers,
-                containsString("Must define property 'contentPath' as 'fcr-container.nt' but was 'null'"));
+        final var headers = ResourceUtils.atomicBinary(defaultId, ROOT_RESOURCE, "blah", h -> h.withContentPath(null))
+                .getHeaders();
+        expectFailureRelaxed(PersistencePaths.nonRdfResource(defaultId, defaultId), headers, headers,
+                containsString("Must define property 'contentPath' as '" + defaultId.substring("info:fedora/".length())
+                        + "' but was 'null'"));
     }
 
     @Test
@@ -275,6 +295,22 @@ public class DefaultHeadersValidatorTest {
         }).getHeaders();
         expectFailureRelaxed(PersistencePaths.rdfResource(defaultId, defaultId), headers, headers,
                 containsString("Must contain a 'digests' property with at least one entry."));
+    }
+
+    @Test
+    public void failWhenHeaderOnlyRdfHasContentSize() {
+        final var headers = ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, null, h -> h.withContentSize(0))
+                .getHeaders();
+        expectFailureRelaxed(PersistencePaths.rdfResource(defaultId, defaultId), headers, headers,
+                containsString("Must define property 'contentSize' as '-1' but was '0'"));
+    }
+
+    @Test
+    public void failWhenHeaderOnlyRdfHasDigest() {
+        final var headers = ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, null,
+                h -> h.withDigests(List.of(URI.create("urn:sha-512:abcd")))).getHeaders();
+        expectFailureRelaxed(PersistencePaths.rdfResource(defaultId, defaultId), headers, headers,
+                containsString("Must define property 'digests' with no entries but was '[urn:sha-512:abcd]'"));
     }
 
     @Test
