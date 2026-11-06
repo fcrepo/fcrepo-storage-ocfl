@@ -116,7 +116,7 @@ public class DefaultOcflObjectSessionTest {
         final var objectMapper = new ObjectMapper()
                 .configure(WRITE_DATES_AS_TIMESTAMPS, false)
                 .registerModule(new JavaTimeModule())
-                .setSerializationInclusion(JsonInclude.Include.NON_NULL);
+                .setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);
 
         sessionFactory = new DefaultOcflObjectSessionFactory(ocflRepo,
                 sessionStaging,
@@ -233,6 +233,25 @@ public class DefaultOcflObjectSessionTest {
         final var committedContent = session.readContent(resourceId);
 
         assertResourceContent(contentStr, content, committedContent);
+    }
+
+    @Test
+    public void writeNewHeaderOnlyRdfResource() {
+        final var resourceId = "info:fedora/foo/bar";
+        final var session = sessionFactory.newSession(resourceId);
+        final var content = ResourceUtils.atomicContainer(resourceId, "info:fedora/foo", null);
+
+        session.writeResource(content.getHeaders(), null);
+
+        final var stagedContent = session.readContent(resourceId);
+        assertEquals(content.getHeaders(), stagedContent.getHeaders());
+        assertFalse(stagedContent.getContentStream().isPresent());
+
+        session.commit();
+
+        final var committedContent = session.readContent(resourceId);
+        assertEquals(content.getHeaders(), committedContent.getHeaders());
+        assertFalse(committedContent.getContentStream().isPresent());
     }
 
     @Test

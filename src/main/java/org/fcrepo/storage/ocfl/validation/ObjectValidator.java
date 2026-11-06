@@ -188,7 +188,13 @@ public class ObjectValidator {
                             headers, rootHeaders);
 
                     if (persistencePaths != null) {
-                        unseenContentFiles.remove(persistencePaths.getContentFilePath());
+                        // Tombstones retain their prior content in the OCFL version inventory.
+                        if (headers.isDeleted()) {
+                            unseenContentFiles.remove(persistencePaths.getContentFilePath());
+                        } else if (ValidationUtil.contentPresent(headers)) {
+                            // Only remove the resource from unseen list if it actually contains content
+                            unseenContentFiles.remove(headers.getContentPath());
+                        }
 
                         if (!headerFile.equals(persistencePaths.getHeaderFilePath())) {
                             context.problem("[Version %s header file %s] Header file should be located at %s",
@@ -336,8 +342,8 @@ public class ObjectValidator {
                 final var object = getObjectVersion(versionNum);
 
                 fixityCheck(object, headerFile, null);
-                if (persistencePaths != null && ValidationUtil.contentExpected(headers)) {
-                    fixityCheck(object, persistencePaths.getContentFilePath(), headers.getDigests());
+                if (ValidationUtil.contentPresent(headers) && !headers.isDeleted()) {
+                    fixityCheck(object, headers.getContentPath(), headers.getDigests());
                 }
             }
         }
