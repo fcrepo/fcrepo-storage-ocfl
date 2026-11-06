@@ -97,7 +97,7 @@ public class ObjectValidatorTest {
         objectMapper = new ObjectMapper()
                 .configure(WRITE_DATES_AS_TIMESTAMPS, false)
                 .registerModule(new JavaTimeModule())
-                .setSerializationInclusion(JsonInclude.Include.NON_NULL);
+                .setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);
 
         sessionFactory = new DefaultOcflObjectSessionFactory(ocflRepo,
                 sessionStaging,
