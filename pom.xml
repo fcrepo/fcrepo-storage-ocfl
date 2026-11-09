@@ -14,7 +14,7 @@
     <compiler.plugin.version>3.16.0</compiler.plugin.version>
     <fcrepo-build-tools.version>7.0.0</fcrepo-build-tools.version>
     <gpg.plugin.version>3.2.8</gpg.plugin.version>
-    <jackson.version>2.22.4</jackson.version>
+    <jackson.version>2.23.0</jackson.version>
     <license.plugin.version>5.1.2</license.plugin.version>
     <project.java.source>21</project.java.source>
     <project_name>${project.artifactId}</project_name>
