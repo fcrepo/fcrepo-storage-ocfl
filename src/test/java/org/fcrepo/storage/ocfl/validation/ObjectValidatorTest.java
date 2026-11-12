@@ -97,7 +97,7 @@ public class ObjectValidatorTest {
         objectMapper = new ObjectMapper()
                 .configure(WRITE_DATES_AS_TIMESTAMPS, false)
                 .registerModule(new JavaTimeModule())
-                .setSerializationInclusion(JsonInclude.Include.NON_NULL);
+                .setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);
 
         sessionFactory = new DefaultOcflObjectSessionFactory(ocflRepo,
                 sessionStaging,
@@ -137,6 +137,32 @@ public class ObjectValidatorTest {
     public void validAtomicRdfResource() {
         writeAndCommit(defaultId,
                 ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, "blah"));
+
+        objectValidator.validate(defaultId, true);
+    }
+
+    @Test
+    public void validHeaderOnlyAtomicRdfResource() {
+        writeAndCommit(defaultId,
+                ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, null));
+
+        objectValidator.validate(defaultId, true);
+    }
+
+    @Test
+    public void validHeaderOnlyAtomicNonRdfDescription() {
+        writeAndCommit(defaultId,
+                ResourceUtils.atomicBinary(defaultId, ROOT_RESOURCE, "blah"),
+                ResourceUtils.atomicDesc(defaultDescId, defaultId, null));
+
+        objectValidator.validate(defaultId, true);
+    }
+
+    @Test
+    public void validHeaderOnlyAtomicAcl() {
+        writeAndCommit(defaultId,
+                ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, "blah"),
+                ResourceUtils.atomicContainerAcl(defaultAclId, defaultId, null));
 
         objectValidator.validate(defaultId, true);
     }
@@ -951,6 +977,19 @@ public class ObjectValidatorTest {
 
         validationFailureStrict(defaultId, true,
                 containsString("[Version v2] Unexpected file: secrets.txt"));
+    }
+
+    @Test
+    public void failWhenHeaderOnlyRdfHasOrphanedContentFile() throws IOException {
+        writeAndCommit(defaultId,
+                ResourceUtils.atomicContainer(defaultId, ROOT_RESOURCE, null));
+
+        ocflRepo.updateObject(ObjectVersionId.head(defaultId), null, updater -> {
+            updater.writeFile(IOUtils.toInputStream("orphan", StandardCharsets.UTF_8), "fcr-container.nt");
+        });
+
+        validationFailureStrict(defaultId, true,
+                containsString("[Version v2] Unexpected file: fcr-container.nt"));
     }
 
     @Test
